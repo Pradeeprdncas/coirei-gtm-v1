@@ -1,0 +1,79 @@
+{
+  "validation_type": "isolated_pure_function_and_syntax_checks",
+  "checks": [
+    {
+      "check": "No bogus numeric product/FAQ",
+      "result": "PASS"
+    },
+    {
+      "check": "Chunker nonempty/bounded",
+      "result": "PASS"
+    },
+    {
+      "check": "Strict host boundary",
+      "result": "PASS"
+    },
+    {
+      "check": "Tracking stripped from URL",
+      "result": "PASS"
+    },
+    {
+      "check": "HTML title/h1/link",
+      "result": "PASS"
+    },
+    {
+      "check": "Reject competitor comparison prices",
+      "result": "PASS"
+    },
+    {
+      "check": "Pricing parsing preserves numeric values",
+      "result": "PASS"
+    },
+    {
+      "check": "Verification requires explicit review",
+      "result": "PASS"
+    },
+    {
+      "check": "Unreviewed feature blocks verification",
+      "result": "PASS"
+    },
+    {
+      "check": "Suite is not auto-verified",
+      "result": "PASS"
+    },
+    {
+      "check": "Recover named products in first-party section",
+      "result": "PASS"
+    },
+    {
+      "check": "Python syntax across files",
+      "result": "PASS"
+    }
+  ],
+  "passed": 12,
+  "failed": 0,
+  "limitations": [
+    "Does not import app with missing dependencies",
+    "No PostgreSQL/pgvector database available here",
+    "No live Ollama/model and no HTTP integration executed"
+  ],
+  "route_registry_check_with_stubs": {
+    "status": "PASS",
+    "registered_paths": 18,
+    "mapped_tables": 17
+  },
+  "mocked_dependency_pytest": {
+    "status": "PASS",
+    "passed": 7,
+    "failed": 0,
+    "note": "pgvector + async engine are stubbed for route/model import only; no DB operations"
+  },
+  "unmocked_pytest": {
+    "status": "BLOCKED",
+    "reason": "pgvector + asyncpg missing from this offline container; pip download failed"
+  },
+  "live_HTTP_and_DB": {
+    "status": "NOT_RUN",
+    "reason": "Local developer server, Postgres credentials, and Ollama model are not available from this environment"
+  }
+}
