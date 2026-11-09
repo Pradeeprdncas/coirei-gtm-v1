@@ -337,17 +337,71 @@ async def all_verified(db:AsyncSession,company_id:int)->bool:
                                  Product.candidate_kind=='standalone_product'))).all()
     return bool(rows) and all(p.status=='verified' for p in rows)
 
+@router.post("/companies/{company_id}/complete")
+async def complete(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = await owned_company(
+        db, company_id, user.id
+    )
 
-@router.post('/companies/{company_id}/complete')
-async def complete(company_id:int, db:AsyncSession=Depends(get_db),user:User=Depends(current_user)):
-    company=await owned_company(db,company_id,user.id)
-    if company.status=='complete':
-        return ok({'company_id':company_id,'status':'complete','changed':False})
-    if not await all_verified(db,company_id):
-        raise HTTPException(409,detail={'code':'UNVERIFIED_PRODUCTS',
-                                        'message':'Verify each standalone product before completing onboarding'})
-    company.status='complete'
-    await message(db,company_id,'assistant','onboarding_complete',
-                  {'text':'Onboarding completed. Your verified company and products are ready.'})
+    if company.status == "complete":
+        return ok({
+            "company_id": company_id,
+            "status": "complete",
+            "changed": False
+        })
+
+    # At least ONE standalone product must be verified.
+    verified_product_id = await db.scalar(
+        select(Product.id)
+        .where(
+            Product.company_id == company_id,
+            Product.candidate_kind == "standalone_product",
+            Product.status == "verified",
+        )
+        .limit(1)
+    )
+
+    if verified_product_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "NO_VERIFIED_PRODUCT",
+                "message": (
+                    "Verify at least one standalone product "
+                    "before completing onboarding."
+                ),
+            },
+        )
+
+    company.status = "complete"
+
+    await message(
+        db,
+        company_id,
+        "assistant",
+        "onboarding_complete",
+        {
+            "text": (
+                "Onboarding completed successfully. "
+                "You can verify additional products later."
+            ),
+            "verified_product_id": verified_product_id,
+            "next_action": "create_projects",
+        },
+    )
+
     await db.commit()
-    return ok({'company_id':company_id,'status':'complete','conversation_url':f'/companies/{company_id}/conversation'})
+
+    return ok({
+        "company_id": company_id,
+        "status": "complete",
+        "verified_product_id": verified_product_id,
+        "next_action": "create_projects",
+        "conversation_url": (
+            f"/companies/{company_id}/conversation"
+        ),
+    })

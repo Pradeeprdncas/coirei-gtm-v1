@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.routers import auth, companies, onboarding, products
 from app.services.llm import llm_health
+from app.routers import projects
+
+from app.routers import competitors
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,3 +56,9 @@ app.include_router(auth.router)
 app.include_router(companies.router)
 app.include_router(onboarding.router)
 app.include_router(products.router)
+
+
+app.include_router(projects.router)
+
+app.include_router(competitors.router)
+

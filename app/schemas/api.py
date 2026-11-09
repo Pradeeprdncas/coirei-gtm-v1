@@ -40,6 +40,8 @@ class ProductPatch(BaseModel):
 class VerifyProduct(BaseModel):
     revision: int = Field(ge=1)
     status: Literal['verified'] = 'verified'
+    accept_fields: list[str] = Field(default_factory=list)
+
 
 
 class GapAnswerItem(BaseModel):

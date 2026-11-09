@@ -17,9 +17,25 @@ class Settings(BaseSettings):
     scrape_max_pages: int = 12
     scrape_timeout_seconds: int = 12
     scrape_max_bytes: int = 2_000_000
+    tavily_api_key: str = ""
+    brave_api_key: str = ""
+    competitor_search_provider: str = "tavily"
+
+    competitor_internal_url: str = (
+        "http://127.0.0.1:8001"
+    )
+    competitor_internal_token: str = ""
+
+    competitor_max_queries: int = 5
+    competitor_max_candidates: int = 10
+    competitor_max_pages: int = 4
 
 
 @lru_cache
 
 def settings() -> Settings:
     return Settings()
+
+
+
+    
