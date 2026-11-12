@@ -840,13 +840,57 @@ def _require_positive(obj: Any, section: str, allow_zero: tuple[str, ...] = ()) 
             raise ConfigError(f"{section}.{f.name}: must be positive")
 
 
+def _find_root_dotenv() -> Path | None:
+    """Walk up from this file to find the project root .env (the one next to app/)."""
+    here = Path(__file__).resolve().parent
+    for directory in [here, *here.parents]:
+        candidate = directory / ".env"
+        if candidate.exists() and (directory / "app").is_dir():
+            return candidate
+    return None
+
+
+def _load_root_dotenv(env: dict[str, str]) -> None:
+    """Load vars from the project root .env into env (does not overwrite existing vars)."""
+    dotenv_path = _find_root_dotenv()
+    if dotenv_path is None:
+        return
+    try:
+        with dotenv_path.open(encoding="utf-8") as fh:
+            for raw_line in fh:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                # Strip optional surrounding quotes.
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                    value = value[1:-1]
+                if key and key not in env:
+                    env[key] = value
+    except OSError:
+        pass
+
+    # Map shared GROQ_* keys to GTM-specific overrides when not already set.
+    for src, dst in (
+        ("GROQ_API_KEY", "GTM__LLM__API_KEY"),
+        ("GROQ_BASE_URL", "GTM__LLM__BASE_URL"),
+        ("GROQ_MODEL", "GTM__LLM__MODEL"),
+    ):
+        if src in env and dst not in env:
+            env[dst] = env[src]
+
+
 def load_settings(path: Path | None = None, environ: Mapping[str, str] | None = None) -> Settings:
     """Load settings from ``path`` (or ``$GTM_CONFIG`` / ``config.toml``) plus env overrides.
 
     A missing default ``config.toml`` is fine (defaults apply); a missing file
     that was named explicitly is an error.
     """
-    env = os.environ if environ is None else environ
+    # Build a mutable copy so we can inject root .env values without mutating os.environ.
+    env: dict[str, str] = dict(os.environ if environ is None else environ)
+    _load_root_dotenv(env)
     explicit = path is not None or CONFIG_PATH_ENV in env
     config_path = path or Path(env.get(CONFIG_PATH_ENV, DEFAULT_CONFIG_PATH))
 

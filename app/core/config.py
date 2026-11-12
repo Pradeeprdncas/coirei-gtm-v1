@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     competitor_max_candidates: int = 10
     competitor_max_pages: int = 4
 
+    # Groq API — used by GTM Crawler for LLM extraction; exposed here so the
+    # main API can also call Groq if needed (e.g. faster gap-question generation).
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "openai/gpt-oss-20b"
+
 
 @lru_cache
 
