@@ -1,0 +1,10 @@
+{
+  "url": "https://news.example/2026/03/acme-series-b",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": false,
+  "description": "Third-party article: a stated round attributed to Acme by name is kept; the publisher's JSON-LD Organization, og:site_name and 'we' sentences are not Acme's.",
+  "company_names": [
+    "Acme"
+  ]
+}

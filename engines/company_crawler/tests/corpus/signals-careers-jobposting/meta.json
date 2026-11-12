@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/careers",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Careers page: JSON-LD JobPosting titles (date posted kept) for the company; a posting for another organization is skipped.",
+  "company_names": [
+    "Acme"
+  ]
+}

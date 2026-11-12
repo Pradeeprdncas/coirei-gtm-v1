@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Home page: JSON-LD Organization (identity, founding, size range, address, NAICS, funder), og:site_name, meta description and generator.",
+  "company_names": [
+    "Acme"
+  ]
+}

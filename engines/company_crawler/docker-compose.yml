@@ -1,0 +1,99 @@
+# `docker compose up -d` starts only PostgreSQL (development and tests).
+# `docker compose --profile app up -d --build` also runs migrations, the API
+# and a worker (scale workers with `--scale worker=3`).
+# `docker compose --profile s3 up -d s3` starts a local S3-compatible store
+# (SeaweedFS, no authentication; development only) on 127.0.0.1:8333.
+#
+# Secrets and the crawler contact come from the environment (or a .env file
+# that is not committed): GTM_CONTACT, GTM_API_TOKEN, EXA_API_KEY.
+
+# Pinned so the volumes (scraper10_pgdata, ...) survive renaming this folder.
+name: scraper10
+
+x-app: &app
+  build: .
+  image: gtm-crawler
+  profiles: ["app"]
+  environment: &app-env
+    GTM__DATABASE__URL: postgresql+psycopg://gtm:gtm@postgres:5432/gtm_crawler
+    GTM__IDENTITY__USER_AGENT_CONTACT: ${GTM_CONTACT:-}
+    GTM__SEARCH__API_KEY: ${EXA_API_KEY:-}
+    GTM__API__TOKEN: ${GTM_API_TOKEN:-}
+  volumes:
+    - rawdata:/data/raw
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: gtm
+      POSTGRES_PASSWORD: gtm
+      POSTGRES_DB: gtm_crawler
+    ports:
+      # Bound to loopback only; this is a local development database.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gtm -d gtm_crawler"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *app
+    command: ["gtm-api"]
+    environment:
+      <<: *app-env
+      GTM__API__HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["gtm-worker"]
+    environment:
+      <<: *app-env
+      GTM__WORKER__METRICS_HOST: 0.0.0.0
+    stop_grace_period: 60s  # time to hand the running job back
+    # Chromium's own sandbox (browser.sandbox) needs user namespaces: Docker's
+    # default seccomp profile plus clone/unshare. No added capabilities, not
+    # privileged (docs/security-review.md).
+    security_opt:
+      - seccomp=deploy/chrome-seccomp.json
+    # Measured: two concurrent ordinary renders peak at ~240 MB per worker,
+    # two worst-case pages (10 MB of HTML, 200k nodes) at ~1.9 GB. Over the
+    # limit the kernel kills a renderer first (oom_score_adj 300): that render
+    # fails and the page is used as fetched. If the worker itself is killed,
+    # its job lease expires and another worker resumes the job.
+    mem_limit: 2560m
+    memswap_limit: 2560m  # no swap: the limit is the limit
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  s3:
+    image: chrislusf/seaweedfs
+    profiles: ["s3"]
+    command: ["server", "-s3", "-dir=/data"]
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - s3data:/data
+
+volumes:
+  pgdata:
+  rawdata:
+  s3data:

@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/platform",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Script, noscript, template and style content is not page text, so claims inside them yield nothing; JSON-LD still parses; one visible sentence is extracted.",
+  "company_names": [
+    "Acme"
+  ]
+}

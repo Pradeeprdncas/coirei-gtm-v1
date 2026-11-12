@@ -1,0 +1,1266 @@
+Metadata-Version: 2.4
+Name: gtm-crawler
+Version: 0.1.0
+Summary: Evidence-first company intelligence crawler for GTM dossiers.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: SQLAlchemy<2.1,>=2.0
+Requires-Dist: alembic<2,>=1.13
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: tldextract<6,>=5.3
+Requires-Dist: httpx<0.29,>=0.28.1
+Requires-Dist: protego<1,>=0.3
+Requires-Dist: lxml<7,>=5
+Requires-Dist: playwright<2,>=1.49
+Requires-Dist: fastapi<1,>=0.115
+Requires-Dist: uvicorn<1,>=0.30
+Requires-Dist: prometheus-client<1,>=0.20
+Requires-Dist: boto3<2,>=1.34
+Requires-Dist: pydantic<3,>=2.7
+Provides-Extra: ocr
+Requires-Dist: pytesseract<1,>=0.3.10; extra == "ocr"
+Requires-Dist: Pillow<12,>=10; extra == "ocr"
+Provides-Extra: pdf
+Requires-Dist: pdfplumber<0.12,>=0.11; extra == "pdf"
+Provides-Extra: http2
+Requires-Dist: h2<5,>=4.1; extra == "http2"
+Provides-Extra: dev
+Requires-Dist: h2<5,>=4.1; extra == "dev"
+Requires-Dist: trustme>=1.1; extra == "dev"
+Requires-Dist: pytest<9,>=8; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"
+Requires-Dist: boto3-stubs[s3]>=1.34; extra == "dev"
+
+# gtm-crawler
+
+Evidence-first company intelligence crawler. Given a company website, it
+collects public evidence for a structured GTM company dossier (company,
+product, traction and competitor fields).
+
+Every value in the dossier must trace back to a quoted source on a fetched
+page. Fields without sufficient evidence are reported as `UNKNOWN`; conflicting
+sources are preserved rather than resolved by picking one.
+
+> Status: V1 pipeline implemented end to end: crawling (robots.txt, sitemaps,
+> prioritized durable frontier, guarded fetching, browser fallback), a
+> bounded external phase (reference profiles, Exa search), rule-based
+> extraction of company, product, traction and competitor evidence (no LLM),
+> field assessment with corroboration and conflicts, and a cited dossier;
+> plus the production service layer (job API, leased workers that survive
+> crashes, Prometheus metrics, S3-compatible raw store). Run against a few
+> live company sites in development (small, bounded crawls); acceptance and
+> load evidence is against a simulated web (docs/production-readiness.md).
+
+## Requirements
+
+- Python 3.11+
+- Docker (for the local PostgreSQL 16 instance)
+
+## Setup
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate     Linux/macOS: source .venv/bin/activate
+pip install -e ".[dev]"
+playwright install chromium        # browser fallback (or set browser.enabled = false)
+
+docker compose up -d --wait        # PostgreSQL on 127.0.0.1:5432
+alembic upgrade head               # create the schema
+```
+
+## Running a crawl
+
+Set `identity.user_agent_contact` first (the crawler refuses to run without
+it), then:
+
+```bash
+gtm-crawl https://example.com            # or: python -m gtm_crawler.cli ...
+```
+
+The command crawls the company's site, extracts and assesses it, searches
+only for what the site left open (the bounded external phase), then resolves
+and crawls its competitors, and prints the crawl ids, statuses, statistics and
+extraction counts together with the `dossier` (see below) as JSON. Exit code 0
+for `completed`/`partial`, 1 for `failed`, 2 for configuration or URL errors.
+
+After improving extraction rules, re-run them over a stored crawl without
+fetching anything (no user-agent contact needed):
+
+```bash
+gtm-crawl --reextract 42                 # crawl id from an earlier run
+```
+
+This is a new extraction run followed by a fresh assessment and dossier. The
+crawl's earlier runs stay in the database as history but no longer count.
+To see what changed first, use `--replay` (see Replay and regression).
+
+Apply the raw-data retention policy (see Raw document store) with
+`gtm-crawl --prune`, e.g. from a daily scheduled job.
+
+## Running as a service
+
+For production the pipeline runs as jobs: `gtm-api` records requests and
+serves results, and any number of `gtm-worker` processes run the jobs.
+
+```bash
+gtm-api                                  # 127.0.0.1:8000 (api.host / api.port)
+gtm-worker                               # repeat on more machines to scale out
+curl -X POST localhost:8000/v1/crawls -H 'content-type: application/json' \
+     -d '{"root_url": "https://example.com"}'
+```
+
+| Endpoint | |
+|---|---|
+| `POST /v1/crawls` | `{"root_url", "domain"?, "idempotency_key"?}` (or an `Idempotency-Key` header). 201 with a new job; 200 with the existing one for the same key, or the company's unfinished job; 409 if the key was already used for another `root_url` |
+| `GET /v1/crawls/{id}` | Status (`CREATED`, `QUEUED`, `RUNNING`, `FINALIZING`, `COMPLETED`, `PAUSED`, `FAILED`, `CANCELLED`), timestamps, error, versions, the job's site crawls, result summary |
+| `POST /v1/crawls/{id}/pause`, `/resume`, `/cancel` | Pause or cancel (at once if queued, else at the next safe point) / put a paused job back in the queue |
+| `GET /v1/crawls/{id}/quality` | The job's crawl-quality report (see [Metrics](#metrics)) |
+| `GET /v1/companies/{id}/dossier` | The current dossier, built on request; `?clean=true` for plain values only (`dossier.clean_dossier`) |
+| `GET /v1/companies/{id}/cost` | What crawling the company cost: total, by kind (cost and usage by unit), and per job (see Cost accounting) |
+| `GET /v1/dead-letters` (`?include_resolved=true`, `limit`) | The dead-letter queue: open items with entity, URL or job, error class, error, attempts |
+| `POST /v1/dead-letters/{id}/requeue`, `/discard` | Put the work back (a URL into its crawl's frontier with fresh attempts, if the crawl is still running or paused; a job as a new job), or close the item; 409 if already resolved |
+| `GET /livez`, `GET /readyz`, `GET /metrics` | Liveness (process answers); readiness (database reachable and schema not behind this code's migration head, else 503; a newer release's schema answers 200 with `schema_ahead`); Prometheus metrics. `/healthz` = `/readyz` |
+
+A "crawl" in the API is a job: the company's site, the external phase and its
+competitors' sites. With `api.token` set (use `GTM__API__TOKEN`), `/v1`
+requests need `Authorization: Bearer <token>`; while rotating, the old token in
+`api.previous_token` is accepted too.
+
+How the pieces stay correct when things fail:
+
+- **Leases.** A worker claims a job with `FOR UPDATE SKIP LOCKED` and renews
+  its lease by heartbeat (`worker.lease_seconds`); URLs inside a crawl are
+  claimed the same way. If a worker dies, its leases expire and another
+  worker resumes the job from the database: the queue, per-URL states and a
+  periodic checkpoint of the crawl's counters. Pages already fetched are not
+  fetched again.
+- **Pause** and **cancel** are delivered by the heartbeat; the crawl stops
+  claiming URLs, finishes those in flight and saves its state. A budget stop
+  is `COMPLETED`; the result keeps the stop reason.
+- **History.** Every job transition is checked against the allowed moves
+  (`gtm_crawler/domain.py`) and appended to `crawl_event` with who made it
+  and why; that table cannot be updated or deleted.
+- **Shutdown** (SIGTERM, Ctrl+C) hands the job back at once for another
+  worker. A database outage leaves the job unacknowledged; it resumes when
+  the database is back. A job claimed `max_job_attempts` times without
+  finishing is failed, so a job that crashes workers cannot loop forever.
+- **Retry policy by error class** (`fetch.http.retry_class`): 429 / 503
+  wait the server's `Retry-After` (else `retry_delay_rate_limited_seconds`),
+  DNS failures `retry_delay_dns_seconds`, other transient failures
+  (timeouts, connection errors, 5xx) `retry_delay_seconds`; everything else
+  (404, TLS, too large, blocked) is not retried.
+- **Dead-letter queue** (`dead_letter_item`, `gtm_crawler/deadletter.py`):
+  a URL still failing after `max_url_attempts`, a URL whose lease ran out
+  `max_url_lease_expiries` times (it may be what kills the worker), a URL
+  whose processing raised an unexpected error (the crawl goes on without
+  it), a job abandoned after `max_job_attempts`, and a job failed by an
+  unexpected error. The work moves to `dlq` (URLs) or `FAILED` (jobs) in the
+  same transaction that writes the item; at most one item is open per URL of
+  a crawl and per job, so a repeated write is harmless. Inspect, requeue or
+  discard through the API.
+- **Backpressure.** New jobs are refused with 429 and `Retry-After` while
+  `api.max_queued_jobs` are waiting for a worker. Inside a crawl each URL is
+  one task through fetch, store, parse and database writes, and at most
+  `crawl.concurrency` run at once, so a slow stage slows claiming instead of
+  building a backlog. Queue depth is exported at scrape time:
+  `queue_jobs{state}`, `queue_urls{state}` (running crawls),
+  `dead_letter_open{entity}`, and `dead_letter_items_total`.
+- **Resuming** refuses changed `urls`, `parse` or `frontier` settings: pages
+  and evidence locators already stored depend on them.
+
+### Deployment
+
+`docker compose --profile app up -d --build` runs PostgreSQL, the migrations,
+the API (published on 127.0.0.1:8000) and a worker from one image (see
+`Dockerfile`; Chromium included, runs as a non-root user). Scale workers with
+`--scale worker=3`. Secrets come from the environment or an uncommitted
+`.env`: `GTM_CONTACT` (required user-agent contact), `EXA_API_KEY`,
+`GTM_API_TOKEN`. `docker compose --profile s3 up -d s3` starts a local
+S3-compatible store (SeaweedFS, unauthenticated, development only) on
+127.0.0.1:8333 for trying the S3 raw store.
+
+Size the database pool for the worker's concurrency (the worker uses
+`crawl.concurrency + 2` connections plus overflow), back up PostgreSQL and
+the raw store together, and scale workers only once measurements show the
+need.
+
+### Staging and rollout
+
+`GTM_ENV=staging` fails closed exactly like `prod`. `deploy/config.staging.toml`
+and `deploy/config.prod.toml` (identical; no secrets) hold conservative initial
+budgets. After every deploy run the smoke test, which checks probes, auth,
+idempotent submission, a full crawl, dossier/quality/cost and that every
+non-UNKNOWN field's lineage ends in a stored raw artifact:
+
+```bash
+GTM_SMOKE_TOKEN=... python -m gtm_crawler.smoke --api https://gtm.staging.internal     --site https://www.example.com/
+```
+
+Extraction changes pass `deploy/canary-gate.sh <prod-ref>` first (additive
+migrations only, corpus, replay of a restored production copy with
+`--fail-on-change`), then workers roll out gradually. `/readyz` stays ready on
+a schema a newer release has migrated. Rotate the API token without downtime
+with `GTM__API__PREVIOUS_TOKEN`. `deploy/staging-test/run.sh` rehearses all of
+this on a local compose stack (test-only). Details, rollback and the migration
+downgrade policy: `docs/staging.md`.
+
+### Production readiness
+
+`python -m gtm_crawler.acceptance [--full] [--out report.json]` demonstrates
+each acceptance criterion of spec section 35 by running the tests and tools
+that prove it (one pytest run over the chosen node ids, the corpus, a seeded
+`--replay-all --fail-on-change`, the restore drill and every load scenario;
+`--full` uses the load scenarios' full scale and a 1000-page drill) and prints
+a matrix of criterion, evidence, PASS / FAIL / NOT DEMONSTRATED and duration;
+exit 1 unless every criterion passes. A skipped test (no Chromium, no
+`pg_dump`) is NOT DEMONSTRATED, never PASS. Scratch databases:
+`--load-database-url`, `--drill-database-url`, `--replay-database-url` (names
+must contain "load", "drill", "acceptance"; they are dropped and recreated);
+tests use `--test-database-url` / `GTM_TEST_DATABASE_URL`. Measured results,
+what "target scale" covers, the go-live checklist, the first-week ramp plan
+and open decisions: [docs/production-readiness.md](docs/production-readiness.md).
+
+## Configuration
+
+Settings are read from `config.toml` in the working directory (or the file
+named by `$GTM_CONFIG`); see `config.example.toml`. Any key can be overridden
+with an environment variable `GTM__<SECTION>__<KEY>`, for example
+`GTM__DATABASE__URL`. Unknown keys are rejected so typos cannot silently fall
+back to defaults.
+
+- **Profiles.** `GTM_ENV=dev|test|staging|prod` also loads `config.<env>.toml`
+  next to the base file (its values win; environment variables win over both).
+  `staging` and `prod` fail closed: it refuses to start without `identity.user_agent_contact`
+  and `api.token`, with the development database URL, without a statement
+  timeout, or with DEBUG logging.
+- **Secrets.** `database.url`, `search.api_key` and `api.token` are secrets:
+  shown as `***` in `repr`, redacted from logs, never stored in crawl
+  configuration snapshots. Set them through the environment.
+- **Feature flags.** `[features] enabled = [...]` turns on experimental logic;
+  only flags the code declares are accepted.
+- **Database.** `[database]` sets the pool (`pool_size`, `max_overflow`,
+  `pool_timeout`), `connect_timeout_seconds`, and server-side
+  `statement_timeout_ms` / `lock_timeout_ms` for every connection.
+- **Versions.** Each crawl and job records the versions of the crawler,
+  parser, extractors, assessment method, dossier schema, search templates
+  and a hash of the output-affecting configuration (`gtm_crawler/versions.py`;
+  the environment name, raw-store location, logging, prices and contact
+  address are left out, so staging and prod with equal budgets hash alike).
+
+## Database
+
+The schema separates what sources say from what the system concludes:
+
+| Table | Holds |
+|---|---|
+| `organization` | Crawl targets, competitors, investors, partners |
+| `crawl_job` | Requested pipeline runs: status, lease, pause/cancel request, attempts, versions, result summary |
+| `crawl_event` | Append-only history of job state changes: from, to, actor, reason |
+| `crawl`, `crawl_url` | Site crawls (with config snapshot and resume checkpoint) and the durable frontier: each URL's state, lease, attempts and history |
+| `robots_snapshot` | Each robots.txt load: origin, status, HTTP code, raw body hash |
+| `sitemap_fetch` | Each sitemap request: status, error, URLs and child sitemaps found, raw body hash |
+| `extraction` | Extraction runs over a crawl; the latest run's observations are current |
+| `url`, `fetch`, `page`, `link` | Normalized URLs, every retrieval attempt, parsed pages, outbound links |
+| `evidence` | Exact quote plus its location (XPath / JSON path, character offsets) |
+| `observation` | One value stated by one source, verbatim and (when exact) normalized with its qualifier |
+| `relationship` | Sourced links between organizations (investor, partner, competitor) |
+| `product` | Products identified for an organization |
+| `field_assessment` | Versioned conclusion per field: state, value, confidence, supporting observations |
+
+`evidence`, `observation`, `relationship` and `field_assessment` are
+append-only (enforced by database triggers). Check constraints stop a
+`field_assessment` from carrying a value unless it cites observations, and
+stop `UNKNOWN`, `CONFLICTING` and `NOT_APPLICABLE` fields from carrying a
+value at all.
+
+Raw HTML is not stored in the database; `fetch.raw_sha256` references the
+content-addressed raw store.
+
+Schema changes go through Alembic migrations in `gtm_crawler/db/migrations`.
+
+## Evidence and provenance
+
+Extractors never write observations directly. They build an
+`ObservationDraft` with a `Quote` (from `gtm_crawler.evidence`: `find_quote` /
+`quote_block` for text, located by the block's XPath plus character offsets;
+`quote_json` for a JSON-LD scalar, located by JSON path; `quote_meta` for a
+`<meta>` tag's content, located as `key[index]`) and pass it to
+`gtm_crawler.db.evidence.EvidenceStore.record`, which re-parses the page's raw
+document and refuses, storing nothing from the batch, when:
+
+- the quote is not exactly at its claimed location on that page;
+- a `stated` value is not word-for-word in its quote, or cuts off a qualifier
+  (`500 customers` out of `more than 500 customers`, `500` out of `500+`);
+- a normalized value has no explicit qualifier (`eq`, `gt`, `gte`, `lt`,
+  `lte`, `approx`, `range`), so a claim like "more than 500" is stored as
+  `{"qualifier": "gt", "value": 500}`, never as a bare 500.
+
+`derived` observations (e.g. a normalized headquarters location) still cite
+the quote they were derived from. Source tier, source type, first-party flag,
+publication date and retrieval time are filled in from the page and its fetch.
+
+Source hierarchy (`classify_source`, relative to the observation's company):
+tier 1 for the company's own site (typed as pricing, documentation, press
+release, investor information, product page or general website) and for
+regulators and registries; tier 2 for business databases and major
+publications; tier 3 for industry publications and professional profiles;
+tier 4 for any other third party. Domain lists are in `[sources]`. Tier
+describes source quality only.
+
+`EvidenceStore.trace(observation_id)` returns the whole chain (value, quote,
+locator, page and its parser version, extractor version, URL, retrieval event
+with status and time, raw artifact with size, format version and whether
+retention pruned it, published / retrieved / observed times, crawl).
+`EvidenceStore.field_lineage(organization_id, field)` starts one step
+earlier, at the field's latest assessment (every item of a list field), and
+traces every observation it cites; a field with no assessment is UNKNOWN with
+no sources. The API serves it at `GET /v1/companies/{id}/lineage/{field}`. Dossier
+citations carry the evidence id, locator, page, fetch, artifact hash and
+parser / extractor versions. `EvidenceStore.verify(evidence_id)` re-parses the raw
+document with the crawl's own parse settings and confirms the quote is still
+exactly there. `evidence_raw_digests()` is the keep set for `RawStore.prune`.
+
+Observation `confidence` is computed, not supplied by extractors:
+`extraction_certainty × source weight × kind factor`. Source weights:
+regulator/registry 0.95, the company's own site 0.90, tier 2 0.80, tier 3
+0.65, tier 4 0.45; kind factor: stated 1.0, derived 0.9. It scores a single
+observation from a single source. Corroboration, conflicts, freshness and
+the thresholds for `CORROBORATED` / `SUPPORTED` are assessed per field
+(`field_assessment`), so no single first-party statement can make a field
+corroborated on its own.
+
+## Extraction
+
+After a crawl, `gtm-crawl` runs the rule-based extractors
+(`gtm_crawler.extract.extract_crawl`; no LLM) over every non-duplicate page,
+re-parsed from its raw document, and records observations through
+`EvidenceStore`. A statement repeated across one site is recorded once per
+run; the same statement on another site is kept, because that is
+corroboration. Each call is a new `extraction` run: assessment, competitor
+resolution and the dossier use only the latest run of each crawl, so
+re-extraction replaces rather than duplicates. Drafts that fail their own evidence checks are counted as `rejected`
+and logged, never stored.
+
+### Company information
+
+| Field | From |
+|---|---|
+| `company_name`, `legal_name`, `website`, `company_description` | JSON-LD Organization `name`, `legalName`, `url`, `description`; `og:site_name`; home page meta description |
+| `founded_year` | JSON-LD `foundingDate`; "founded / established / incorporated in YYYY" |
+| `employee_count`, `company_size` | JSON-LD `numberOfEmployees` (exact value, or `minValue` / `maxValue` as `gte` / `lte`); "more than 250 employees", "up to 250", "fewer than 50", "1,200+ employees", "51-200 employees" (qualifiers kept, the same vocabulary as other counts: `gt`/`gte`/`lt`/`lte`/`approx`) |
+| `headquarters` | "headquartered in …", "our headquarters is in …", "HQ: …" |
+| `company_location`, `company_country` | JSON-LD `address` (a postal address is not treated as the headquarters); "based in …" |
+| `ownership_type` | JSON-LD `tickerSymbol`, `parentOrganization`; "publicly traded", "NASDAQ: XYZ", "privately held", "venture-backed", "subsidiary of …", "employee-owned", "non-profit" |
+| `business_model` | B2B, B2C, SaaS, marketplace, subscription, open source, freemium, usage-based, only as a description of the company itself ("we are a B2B SaaS platform", not "we help SaaS companies") |
+| `market_domain` | JSON-LD `naics` / `isicV4`; "for the logistics industry" |
+
+Rules favour precision. Text is attributed to the company only when its
+sentence refers to the company itself ("we", "our", or a name the site uses
+for itself in JSON-LD or `og:site_name`), so a blog post about another company
+yields nothing. JSON-LD Organization nodes count only at the top level (not a
+nested publisher or customer) and only if any `url` they give is on the site.
+
+### Products
+
+A product is identified (a `product` row) only from:
+
+1. a JSON-LD `Product`, `SoftwareApplication`, `WebApplication` or
+   `MobileApplication` node the site publishes about itself (not one whose
+   `url` is on another domain), or
+2. a page at the product's own URL (`/products/<slug>`, `/product/<slug>`,
+   `/apps/<slug>`) whose `<h1>` or `og:title` names it.
+
+Feature and pricing pages alone are never products, and products are never
+merged because they share a site: two sightings are one product only if their
+slugs match (lowercased name with the company's own name dropped from the
+front). The number of products is the count of `product` rows.
+
+| Field | From |
+|---|---|
+| `product_name`, `product_description`, `product_category` | JSON-LD `name`, `description`, `applicationCategory` / `category`; product page `<h1>` / `og:title` and meta description |
+| `product_positioning` | the product page's opening paragraph after its `<h1>`, quoted as written |
+| `key_feature`, `main_use_case` | JSON-LD `featureList`; sub-headings and list items under a "Features" / "Capabilities" or "Use cases" heading |
+| `price`, `plan_name` | pricing pages (`/pricing`, `/plans`, …) and JSON-LD `offers`. Prices keep their wording ("Starting at €99 per user per month") with amount, currency, period and `gte` for "from / starting at" normalized; a billing cycle is its own key ("$249/mo billed annually": `per: ["month"]`, `billing: "annual"`); "Contact sales" is recorded as `contact_sales`, never a number. A price's plan (the heading above it) is its `qualifier`. |
+| `recent_update` | changelog / release-note / news / press pages: headings carrying their own date, or the `<h1>` of a page with an explicit publication date. Undated items are not reported as updates. |
+
+Observations from a product's own page or JSON-LD node carry its
+`product_id`; company-wide pages (`/features`, `/pricing`, `/changelog`)
+produce observations with no product, since which product they describe is
+not stated.
+
+### Traction
+
+Traction figures are recorded only as stated. No figure is ever computed from
+another: funding is never a valuation, a round is never total funding,
+customers are never an exact count unless the source gives one, and nothing
+is estimated from prices, traffic or headcount.
+
+| Field | Recognized statements |
+|---|---|
+| `arr`, `mrr` | "$10M ARR", "annual recurring revenue exceeded $2.5 million", "over $400K MRR" |
+| `annual_revenue` | "$30M in annual revenue", "revenue was €30 million" |
+| `customer_count` | "more than 500 customers", "2,000+ companies use Acme" |
+| `customer_concentration` | "our largest customer accounted for 18% of total revenue", "no single customer represents more than 10% of revenue" (kept verbatim) |
+| `funding_round` | "raised a $20M Series A", "closed its seed round of $3M"; a raise with no round named has `round: null` |
+| `total_funding` | only when stated as a total: "raised $50M to date", "total funding of $75M", "raised a total of …" |
+| `valuation` | "valued at $1.2 billion", "a $500M post-money valuation" |
+| `investor` | "led by …", "backed by …", "with participation from …", "investors include …"; JSON-LD `funder` |
+| `technology_partnership`, `strategic_partnership` | "technology partners include …", "strategic partnership with …", "an AWS Advanced Technology Partner", names under "Technology partners" / "Strategic partners" headings |
+| `partnership` | a partnership whose kind is not stated ("partnered with …"); type `unspecified`, no relationship |
+| `product_sales` | "sold more than 10,000 units" (on a product's page, linked to it) |
+
+Amounts keep their wording and are normalized as `{qualifier, amount,
+currency}` (K / M / B / million / billion / lakh / crore scaled); a year
+stated in the sentence ("in 2025", "FY2024") is added as `year`. Investors
+and typed partnerships are also stored as `relationship` rows citing the
+observation; organizations known only by name are matched by exact name.
+
+A statement counts only if the company is its subject: a self-reference
+("we", "our", or the company's name) must come before the claim with no other
+proper noun in between, so "we congratulate our customer Globex on raising
+$50M" records nothing. The website
+domain and subdomains come from the crawl's own fetch records rather than
+from page statements.
+
+### GTM signals
+
+`gtm_crawler/extract/signals.py` (production spec section 17) adds, with the
+same subject rules:
+
+| Field | From |
+|---|---|
+| `customer` | "our customers include A, B and C"; on the company's site, a sentence opening "Trusted by A and B" (a list ending in a generic noun, "Fortune 500 companies", names no one) |
+| `case_study` | the `<h1>` of `/customers/<slug>`, `/case-studies/<slug>`, `/customer-stories/<slug>` pages |
+| `integration` | "integrates with A, B and C"; the product an `/integrations/<slug>` page's `<h1>` names ("Acme + Salesforce") when that is unambiguous |
+| `job_opening` | JSON-LD `JobPosting` titles for the company (date posted as `as_of`) |
+| `open_roles` | "we have more than 40 open positions" (qualifier kept) |
+| `office_location` | "we have offices in London, New York and Berlin" |
+| `website_technology` | the site's `<meta name="generator">`; nothing is inferred from scripts, headers or markup |
+
+Page-level signals count only on the company's own site. Press and news are
+the `recent_update` field (dated headings on news, press and changelog pages).
+
+## Field assessment
+
+After extraction, `gtm_crawler.assess.assess_organization` appends one
+`field_assessment` row per field for the company, each of its products and
+each crawled competitor (method `fa-v2`: the approved `fa-v1` rules with the
+spec's field states, VERIFIED → `CORROBORATED`, FOUND → `SUPPORTED`,
+UNVERIFIED → `UNSUPPORTED`, plus `STALE`). Rows are never
+updated: the latest per field is current, earlier ones are history.
+
+1. **Independence.** Observations from the same site (registrable domain of
+   the page) are one source; a repeated statement is not corroboration.
+2. **Agreement.** Equal normalized values agree; a bound and a value inside it
+   are compatible ("more than 500" and "620" gives 620). Numbers are compared
+   as intervals (`approx` = ±10%) and never across currencies; places by word
+   containment ("Austin" vs "Austin, Texas"); ownership by fixed incompatible
+   pairs (public vs private, …). Anything else conflicts.
+3. **Time.** For figures that change (employees, customers, ARR/MRR, revenue,
+   funding, valuation, unit sales), a newer dated statement supersedes an
+   older one, which stays as history and is not cited; disagreements within
+   the latest period or involving undated statements are conflicts.
+4. **Confidence** = 1 − ∏(1 − best observation confidence per source), at most
+   0.99.
+5. **State.** None observed → `UNKNOWN`. Unresolved disagreement →
+   `CONFLICTING` with no value and every disagreeing observation cited. Two or
+   more independent sources, one of tier 1–2, confidence ≥ 0.80 → `CORROBORATED`.
+   Confidence ≥ 0.60 → `SUPPORTED`. Otherwise `UNSUPPORTED`: the claim is
+   kept with its citations and shown as a claim, never as a fact.
+6. **High-risk fields** (ARR, MRR, revenue, funding, valuation, customer count
+   and concentration, employee count and size, investors, ownership, product
+   sales) need a source other than the company itself to be `CORROBORATED`; a
+   claim only the company makes is at most `UNSUPPORTED`.
+7. **Staleness.** A `SUPPORTED` / `CORROBORATED` time-varying figure whose
+   newest evidence (the year it states, else publication, else retrieval
+   date) is older than `[assessment] stale_after_days` (730) is `STALE`; the
+   value stays, dated.
+8. `NOT_APPLICABLE` is never set automatically.
+
+Each assessment stores its confidence components (best confidence, tier and
+age per source) and, in `corroboration`, every observation's role:
+`supports`, `qualifies` (a compatible bound), `contradicts` or `superseded`.
+Rows written by `fa-v1` keep their old states as history.
+
+List fields (investors, competitors, partners, features, use cases, prices,
+business models, locations, …) are assessed per item. `number_of_products` is
+the count of identified products, each cited by the observation naming it.
+Every expected field that nothing supports is written as `UNKNOWN`.
+
+## Dossier
+
+`gtm_crawler.dossier.build_dossier` (schema 5, spec section 20) renders the
+latest assessments: the
+company (domain, subdomains from the crawl's own fetch records, and every
+field), each product, and each competitor with its evidence basis and the
+competitor-analysis fields of GTM Parameters V1.0. Every field has a `state`;
+a `value` only where the state allows one; a `confidence`; and `citations`
+(URL, exact quote, verbatim value, source tier and type, first-party flag,
+retrieved and published times). `sections` groups the field names under
+the spec's headings (identity, description and positioning, products, features,
+pricing, target customers, industries and use cases, customer references,
+traction, funding, partnerships and integrations, competitors, press, hiring,
+geography, technology); `summary` counts field states; `freshness` gives the
+last crawl, the oldest and newest evidence retrieval and the STALE fields;
+`versions` are those the company's latest crawl recorded; `cost` totals the
+job that ran that crawl (see Cost accounting). Served at
+`GET /v1/companies/{id}/dossier`, JSON only: crawled text is data, never
+rendered. Every API response carries `X-Content-Type-Options: nosniff`,
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`,
+`X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`; the Swagger and
+ReDoc HTML pages are off (`/openapi.json` remains). For local development,
+`api.docs = true` serves Swagger UI at `/docs` (staging/prod refuse it);
+`start.bat` with no argument starts the API and a worker with it on.
+
+## Market research
+
+Besides company dossiers, the service runs industry- and product-level
+market research (`gtm_crawler/market/`): it plans searches for a research
+request, fetches each result as a single page under the same safeguards
+(network guard, robots.txt, throttle, raw store; links are never
+followed), extracts quoted evidence and figures with rules (no LLM),
+rates sources, keeps contradicting figures side by side, and returns a
+structured report in which every finding points at its evidence. Product
+research reuses a crawled company's dossier (`company_id`) and checks
+proposed differentiators against competitors' own pages. Market sizing
+(TAM/SAM/SOM, top-down and bottom-up, scenarios, sensitivity) and
+opportunity scoring are deterministic calculations over explicit inputs.
+
+Competitor ads: an operator records ads seen on Meta's Ad Library or Google's
+Ads Transparency Center in a JSON file (no automated collection: their terms
+and API coverage rule it out for India) and imports it; a product request
+with `"include_ads": true` then reports what the competitors' ads say (known
+competitors, and a `company_id`'s crawled competitors) and how their landing
+pages match. `--ad-checklist` turns a crawl into the list of ad library
+searches to do (docs/ad-intelligence-design.md).
+
+```bash
+gtm-market request.json --markdown       # one run in this process
+gtm-market --ad-checklist 7 --markdown   # crawled company 7: which competitors' ads to capture, links
+gtm-market --import-ads ads.json --operator "Asha" --screenshots shots/   # captured ads
+curl -X POST localhost:8000/v1/market/research -H 'content-type: application/json'      -d '{"mode": "industry", "subject": "CRM software", "geography": "India"}'
+```
+
+`gtm-worker` runs queued research when no crawl job is waiting. Endpoints:
+`POST /v1/market/research`, `GET /v1/market/research/{id}` (status,
+progress), `.../report[?format=markdown]`, `.../cancel`, `.../ask` (the
+evidence most relevant to a question; with a model configured, an answer
+citing it), and `POST /v1/market/sizing`. Optional: OCR of page images
+(`pip install -e ".[ocr]"`, `market.ocr_enabled`), text PDFs as evidence with
+page-level, re-checkable quotes (`pip install -e ".[pdf]"`, `market.pdf_*`;
+scanned PDFs are not read) and a model narrative
+(`market.llm_model`). Methods, configuration and limitations:
+docs/MARKET_ENGINE_IMPLEMENTATION.md; schemas: docs/MARKET_DATA_MODEL.md;
+sizing: docs/MARKET_SIZING_METHODOLOGY.md; assessment:
+docs/ARCHITECTURE_ASSESSMENT.md; post-implementation audit:
+docs/POST_IMPLEMENTATION_AUDIT.md; live benchmark and quality gates:
+docs/MARKET_BENCHMARK.md (`python -m gtm_crawler.market.benchmark`).
+
+### Price extraction accuracy
+
+Scored against hand-labelled prices (docs/MARKET_BENCHMARK.md):
+
+| Set | Precision | Recall |
+|---|---|---|
+| Fixtures (360 labelled prices; development data, rules tuned on it) | 97.9% | 89.2% |
+| Live pages (456 labelled prices, runs 6-7) | 95.7% | 73.7% |
+| Held out (heldout-v2, 539 judgeable prices, never tuned on) | 82.7% | 54.2% |
+
+The held-out row is the estimate for unseen sites. Amount and currency are
+right on 95.9% of held-out matches; attributing a price to its plan and
+product is the weakest part (13.4%). The fixture floor is enforced by
+`test_pricing_fixture_benchmark_holds` (precision >= 97%, recall >= 88%).
+
+## URL handling
+
+`gtm_crawler.urls.normalize_url` produces one canonical form per resource:
+lowercase scheme and host, IDNA hosts as punycode, default ports removed,
+fragments dropped, dot segments resolved, duplicate slashes collapsed,
+percent-escapes normalized, configured index files removed, and configured
+tracking/session parameters stripped from the query and from `;path`
+parameters, with remaining query parameters sorted. Non-http(s) schemes,
+credentials in URLs and malformed hosts or ports are rejected, as are
+non-canonical numeric IPv4 hosts (`http://2130706433/`, `http://0x7f.1/`,
+`http://127.1/`, `http://192.168.001.1/`): resolvers disagree on them, so only
+dotted-quad literals are accepted and judged by the network guard.
+
+`gtm_crawler.frontier.Frontier` is the per-site priority queue. It admits a URL
+only if it is new, on the target's registrable domain (subdomains included;
+other sites are rejected as `external`), within the depth limit, and passes the
+crawler-trap rules: URL length, path depth, query-parameter count, repeated
+path segments, a cap per generalized URL shape (e.g. `/events/{n}/{n}`,
+`/search?q`), a cap per host + first path segment, a cap per host
+(`max_urls_per_host`), a cap on query-string variants per path (sort/filter
+combinations), and session ids left in the URL. It also watches unique-content
+yield: once `yield_min_fetches` pages of one URL shape or section were fetched,
+the shape or section closes (`trap:low_yield`) if fewer than
+`min_unique_yield` of them brought new content (duplicates, error pages); this
+stops template duplication, pagination past the end and repeated redirects,
+and already-queued URLs of a closed shape are dropped when claimed. Every
+rejection is counted by reason. Limits are in the `[frontier]` config section.
+
+## Fetching
+
+`gtm_crawler.fetch.http.HttpFetcher` returns a `FetchResult` for every URL,
+including failures (`blocked`, `timeout`, `too_large`, ...); it does not raise
+for network, policy or HTTP errors.
+
+- Redirects are followed manually (limit `fetch.max_redirects`); every hop is
+  normalized and checked, and loops or non-http(s) targets are errors.
+- 429, 500, 502, 503 and 504 responses and network errors are retried with
+  jittered exponential backoff; `Retry-After` is honoured up to
+  `fetch.max_retry_after`, beyond which the fetch gives up.
+- Bodies are streamed; the transferred size and the decompressed size are each
+  capped at `fetch.max_body_bytes`. Only `gzip` and `deflate` are accepted.
+- `Set-Cookie` headers are never stored.
+- `identity.user_agent_contact` must be set; it is sent in the User-Agent.
+
+### Network guard
+
+Every TCP connection goes through `gtm_crawler.netguard.NetGuard`: the host is
+resolved once, every resolved address must be globally routable unicast
+(private, loopback, link-local and cloud-metadata, CGNAT, documentation,
+multicast and reserved ranges are refused, including IPv4 embedded in IPv6),
+the port must be in `fetch.allowed_ports`, and the connection is made to the
+checked address, so DNS rebinding cannot swap it afterwards. TLS still
+verifies the certificate for the original hostname (verification cannot be
+turned off). Because the check sits at the connection layer, it applies to
+every redirect hop. Environment proxy settings are ignored.
+
+- DNS answers are cached (`fetch.dns_cache_size` hosts for
+  `fetch.dns_cache_seconds`); the policy is re-applied to cached answers on
+  every connection.
+- `fetch.allowed_networks` explicitly allows otherwise refused networks for a
+  deployment (e.g. an internal test site); it is empty by default and logged
+  when set. Cloud metadata endpoints (169.254.169.254, fd00:ec2::254,
+  100.100.100.200, 169.254.170.2) are refused regardless, also when embedded
+  in IPv6 (IPv4-mapped, 6to4, NAT64, Teredo).
+- IPv6 ranges Python's `is_global` wrongly reports as global are refused:
+  `::/96` (IPv4-compatible), `::ffff:0:0:0/96`, `64:ff9b:1::/48` and
+  `fec0::/10`.
+
+### HTTP client
+
+- **Timeouts:** connect (TCP and TLS, `connect_timeout`), time to first byte
+  (`ttfb_timeout`: request sent to response headers received), each read or
+  write (`read_timeout`, `write_timeout`), and the whole attempt
+  (`attempt_timeout`).
+- **Limits:** `max_body_bytes` on both transferred and decompressed size, and
+  `max_decompression_ratio` (a body that expands more than 100x once past
+  `decompression_ratio_min_bytes` is a decompression bomb).
+- **Errors** are classified precisely (`FetchError`): policy (`blocked`,
+  `invalid_redirect`, `too_many_redirects`, `redirect_loop`); network, retried
+  with jittered backoff (`dns_failure`, `connect_timeout`, `ttfb_timeout`,
+  `read_timeout`, `total_timeout`, `pool_timeout`, `connection_error`,
+  `protocol_error`); and not retried (`tls_error`, `too_large`,
+  `decompression_bomb`, `unsupported_content_type`, `unsupported_encoding`,
+  `decode_error`).
+- **Conditional requests** (`conditional_requests`, on): a URL fetched in an
+  earlier crawl is requested with its `ETag` / `Last-Modified`; on `304 Not
+  Modified` the stored, hash-verified body is reused (the fetch is recorded
+  with status 304 and that body's hash). If the stored copy was pruned, the
+  page is fetched whole.
+- **HTTP/2** (`http2`, off; `pip install ".[http2]"`): negotiated by ALPN
+  where the server offers it, through the same network guard.
+
+### robots.txt and sitemaps
+
+robots.txt is fetched once per origin and interpreted per RFC 9309 (via
+Protego): a 4xx response means no restrictions (except 429), while 5xx or
+network failure means nothing may be fetched. Rules from the group matching
+`identity.product_token` take precedence over `*`. Rules are reused for at
+most `robots.max_age_seconds` (24 hours, RFC 9309 section 2.4), then loaded
+again. Every load is kept in `robots_snapshot` (the body in the raw store).
+
+**Policy engine.** Every fetch is decided by `gtm_crawler/policy.py` as ALLOW,
+BLOCK, DEFER or REJECT, and every non-ALLOW decision has a reason:
+`out_of_scope` (REJECT), `robots_disallowed` or `robots_unreachable` (BLOCK).
+Redirect hops are decided the same way before they are followed, so an
+in-site redirect into a disallowed path is refused (`redirect_robots_disallowed`,
+`redirect_off_site`). Each refusal sets the URL's state and reason and is
+appended to `crawl_event` with the id of the robots snapshot that was
+applied, so it can be audited from the exact rules; counts are in the crawl's
+`stats.policy_decisions`. Frontier admission (traps: REJECT; depth and
+breadth budgets: DEFER) is stored as the URL's state and reason.
+
+Sitemaps are discovered from robots.txt declarations and `/sitemap.xml`,
+following sitemap indexes (limits in `[sitemaps]`). XML, gzip and plain-text
+sitemaps are supported. Only absolute URLs on the target site are kept, and
+XML is parsed with entity resolution and network access disabled. Sitemap
+requests obey robots.txt and the per-host throttle (including Crawl-delay),
+and each is recorded in `sitemap_fetch`: status, error, URLs yielded, child
+sitemaps, URLs dropped, the index that listed it, and the raw body's hash.
+Sitemaps are discovery aids, not a complete picture of a site.
+
+### Browser fallback
+
+Pages are fetched over HTTP first. A page is rendered in headless Chromium
+(Playwright) only when its parsed text is shorter than
+`browser.min_text_chars` **and** it contains an executable `<script>` (JSON-LD
+and JSON data blocks do not count), or when it has scripts and a `<noscript>`
+notice saying its content needs JavaScript. The rendered DOM replaces the HTTP page
+only if it yields more text; both attempts are recorded in `fetch`
+(`method = http` / `browser`) and both bodies go to the raw store.
+
+Chromium makes no network connections of its own. Every request it issues is
+intercepted: the main document is served from the HTTP body already fetched;
+only `document`, `script`, `xhr` and `fetch` requests are allowed (images,
+styles, fonts and media are refused), and those are checked against
+robots.txt, wait for the host's throttle slot and are performed by the HTTP
+fetcher, so the network guard and size limits apply. As a backstop Chromium
+runs behind a non-existent proxy (loopback included), WebSockets are mocked,
+service workers are blocked and WebRTC cannot use non-proxied UDP.
+
+One browser is launched per crawl, on first need; each render gets an isolated
+context. Limits: `browser.concurrency` renders at a time, `max_renders` per
+crawl, `render_timeout` per render and `settle_timeout` waiting for network
+idle. Per render, the page may make at most `max_requests_per_render` requests
+bringing in at most `max_bytes_per_render` bytes (further requests are refused
+and counted; requests already in flight when the byte budget is crossed still
+complete), and its final HTML may not exceed `fetch.max_body_bytes`.
+Chromium runs with a capped V8 heap (`js_heap_mb`), is replaced after
+`recycle_after_renders` renders (the old one closes when its last render
+ends) and is relaunched after a crash, at most `max_restarts` times.
+`circuit_failure_threshold` browser failures in a row stop rendering for
+`circuit_cooldown_seconds` (pages are used as fetched). If Chromium cannot
+start, the crawl continues over HTTP and the reason is reported in the crawl's
+`stats.browser.unavailable`. `stats.browser` also reports the render cost
+(`render_ms`, `requests`, `bytes`, `requests_refused`), `restarts` and the
+`circuit` state; metrics `browser_render_duration_seconds` and
+`browser_restarts_total`.
+
+Chromium runs with its own OS sandbox (`browser.sandbox`, default on): each
+renderer gets its own user, pid and network namespaces and a seccomp-bpf
+filter. On Windows and macOS nothing extra is needed. On Linux it needs
+unprivileged user namespaces; Docker's default seccomp profile forbids them,
+so the worker runs with `deploy/chrome-seccomp.json` (Docker's default profile
+plus `clone`/`unshare`; no added capabilities, not privileged), as
+`docker-compose.yml` does. If the sandbox cannot start, Chromium does not
+start and the crawl continues over HTTP (`stats.browser.unavailable`).
+`staging`/`prod` refuse `sandbox = false` unless `allow_unsandboxed = true`.
+The worker container has a measured 2.5 GiB memory limit; over it the kernel
+kills a renderer first (that render fails), and a killed worker's job is
+resumed by another worker when its lease expires.
+`deploy/sandbox-test/run.sh` proves the sandbox, the absence of browser DNS
+lookups and the memory-limit behaviour in the built image (test-only;
+`GTM_SANDBOX_IMAGE=gtm-crawler pytest tests/test_hardening_phase18.py` runs it).
+
+### External pages and search
+
+The crawler never crawls the open web, and searches only where first-party
+evidence is insufficient. After the company's site, its pages are extracted
+and assessed; a company field still `UNKNOWN`, `UNSUPPORTED` (e.g. a revenue
+figure only the company states), `STALE` or `CONFLICTING` is a gap. The bounded
+external phase (`[external]`) then fetches single pages elsewhere for the
+gaps only:
+
+| Query | Runs when a gap is in |
+|---|---|
+| `"<company>" funding` | funding round, total funding, valuation, investors |
+| `"<company>" revenue customers` | ARR, MRR, revenue, customer count / concentration |
+| `"<company>"` on reference domains | profile facts: legal name, location, founding, size, ownership, funding |
+
+- **Reference profiles** (LinkedIn, Crunchbase, G2, …) that the site links
+  to, or that the profile query returns for this exact company (the URL must
+  contain the company's name slug), up to `max_reference_pages`, when a
+  profile fact is a gap.
+- **Search results** of the queries above, up to `max_search_pages`,
+  excluding the company's own site.
+- **Competitor discovery**, every crawl (competitors are an open-ended
+  list, so it is not gated by gaps), under its own budget:
+  `max_competitor_queries` queries and `max_competitor_search_pages` pages.
+  Queries come in families, taken in turn so a budget cut trims depth rather
+  than whole families (`search.competitor_queries`):
+
+  | Family | Queries |
+  |---|---|
+  | company name | `"<name>" competitors`, `alternatives`, `vs`, `versus`, `compared`, `comparison`, `switch from`, `migrate from`, `apps like`, `competitors <year>`, `review alternatives` |
+  | other names the site uses | the first two of those |
+  | each product name | `"<product>" alternatives`, `"<product>" vs` |
+  | each product category / market domain | `best <c> software`, `top <c> tools`, `<c> companies`, `<c> vendors comparison` |
+  | second round | for the `second_hop_competitors` strongest competitors known after round one's pages are extracted: `"<rival>" vs "<company>"`, `"<rival>" alternatives` |
+
+  Competitor queries ask the provider to leave out the company's own domain.
+  Their counts are in `stats.external.competitors`.
+
+The gaps and queries are in the crawl's `stats.external`. If anything was
+fetched, extraction and assessment run again over all pages.
+
+Other sites' pages are read only when a link ties them to the company (to or
+from its site, see identity resolution); the rest are stored and counted as
+`identity_unverified_pages`. Many search results, list articles above all,
+are kept and not read for this reason.
+
+Each is fetched by our own fetcher (robots.txt, network guard, throttle, raw
+store), recorded with `discovered_via` `link` or `search` (and the query), and
+its links are recorded but never followed. Many profile sites disallow
+crawlers in robots.txt; those pages are skipped and recorded as such.
+
+Search uses [Exa](https://exa.ai/docs/reference/search) and only finds URLs;
+evidence always comes from pages we fetched ourselves. Set the key with
+`GTM__SEARCH__API_KEY`; without one, search is skipped. The key is never
+stored in the crawl's configuration snapshot, statistics or query records.
+
+Providers sit behind `search.SearchProvider` and return normalized results
+(http(s) URLs only, each once, with their position). Transient failures
+(network errors, 429, 5xx) are retried `search.max_retries` times with
+jittered backoff, or after the provider's `Retry-After` when it is at most
+`max_retry_after` seconds. `search.FailoverSearch` asks the configured
+providers in order and falls over to the next when one fails; a provider
+failing `circuit_failure_threshold` queries in a row is skipped for
+`circuit_cooldown_seconds`. Only Exa is configured today; another provider is
+one `SearchProvider` implementation in `make_search`. At most
+`max_queries_per_crawl` gap queries are sent per crawl (competitor queries
+have their own budget, above).
+
+Every query is stored in `search_query` (template, query, domains, provider
+that answered, `ok` / `failed` / `over_budget`, error, result count,
+duration) and its results in `search_result` (position, URL, title,
+published date). Results stay discovery: a result becomes evidence only
+through the page we fetch for it.
+
+Extractors treat other sites' pages as third-party: "we" / "our" there is the
+publisher, so only the company's name refers to it; the page's own site name,
+products, pricing and partner lists are not attributed to the company; and
+JSON-LD counts only if it names the company's URL.
+
+### Competitors
+
+A company is a competitor only on explicit evidence, recorded as a
+`competitor` observation and a `relationship` whose `basis` says which:
+
+| Basis | Evidence |
+|---|---|
+| `comparison_page` | own page at `/vs/x`, `/compare/x`, `/a-vs-b` whose title names the other company ("Acme vs Globex"), matching the URL |
+| `alternative_page` | own page at `/x-alternative(s)`, `/alternatives/x` titled "The best Globex alternative" |
+| `stated_competition` | "we compete with …", "our competitors include …", or the same with the company's name on other sites |
+| `stated_alternative` | "Acme is the leading alternative to …", "alternatives to Acme include …" |
+| `stated_contrast` | a sentence opening "Unlike Globex, we …" (weaker) |
+| `third_party_alternatives_list` | items under a page titled "Acme alternatives" / "Acme competitors" on another site |
+| `third_party_comparison` | another site's page titled "Acme vs Globex" / "Compare Globex and Acme" |
+| `listed_as_alternative` | another site's page titled "Globex alternatives" that lists Acme as one |
+
+Co-mentions, customers, partners, integrations and investors are never
+treated as competitors.
+
+**Candidates.** On another site's list that has the company as one of its
+items ("The 10 best CRM software", "Globex alternatives"), the other items are
+recorded as `candidate_competitor` (relationship type and observation field,
+basis `category_list`). Being listed together is a co-mention, so a candidate
+is never a competitor: its domain is not resolved, its site is not crawled,
+and the dossier lists it apart, under `candidate_competitors` (names also
+found as competitors are left out there). The field is not one of the
+company fields reported UNKNOWN when nothing was observed, so it never shows
+as a gap.
+
+A competitor's domain is taken only from a link on a page that named it: the
+link's text is the competitor's name, or its domain's first label is the
+name's slug ("Globex" -> `globex.com`), excluding the company's own site and
+reference domains. If the evidence pages point to more than one candidate
+domain, or none, the competitor stays unresolved. Each resolved competitor's
+own site is then crawled (up to `max_competitor_crawls` competitors,
+`competitor_max_pages` pages each, high-value pages first, no external phase)
+and extracted, so competitor-analysis fields come from the competitor's own
+first-party pages.
+
+## Parsing
+
+`gtm_crawler.parse.parse_page` turns an HTML body into a `ParsedPage`:
+
+- **Text blocks**: each block-level element's visible text, with its XPath,
+  tag, heading level and page region (`main`, `nav`, `header`, `footer`,
+  `aside`). Regions come from semantic tags and ARIA roles, then from class
+  and id hints for plain-`<div>` layouts (`site-menu`, `sidebar`,
+  `cookie-banner`, `footer-links`, ...; whole tokens only). Navigation,
+  headers and footers are kept and labelled rather than removed, since they
+  often carry company facts. Script, style and similar non-content elements
+  are skipped. `cleaned_text` joins all blocks; `main_text` only those outside
+  boilerplate regions.
+- **Links** with anchor text (falling back to image alt text), `rel`, and the
+  surrounding block text; **lists**; **tables** as rows of cell text.
+- **Metadata**: title, description (meta, OpenGraph or Twitter), headings,
+  language, canonical URL, `<base>`, and all `<meta>` values (including
+  OpenGraph and Twitter) keyed by name/property.
+- **Schema.org microdata**: each `itemscope` with its types, its own
+  `itemprop` values (nested items are separate) and its XPath.
+- **JSON-LD**: every script kept as parsed; every typed node addressable by a
+  JSON path (e.g. `$.jsonld[0]["@graph"][2]`). Malformed scripts are recorded
+  in `json_ld_errors`.
+- **Publication date** only from explicit markers (Article-type JSON-LD
+  `datePublished`, `article:published_time` and similar meta tags,
+  `<time itemprop="datePublished">`), with the source recorded in
+  `published_at_source`. Dates mentioned in body text are not used.
+- **Fingerprints**: `text_sha256` for exact duplicates, 64-bit `simhash` for
+  near-duplicates, both over the page's content outside navigation, headers,
+  footers and sidebars, so pages sharing a large menu are not mistaken for
+  duplicates (a page with nothing else falls back to all its text).
+
+Character encoding follows the WHATWG order: byte-order mark, HTTP charset,
+`<meta>` charset, then UTF-8. Parsing never raises for bad input: pages are
+untrusted, so any failure is reported in `parse_error`, the raw document is
+still stored for replay, and the crawl continues. libxml2's safety limits
+(nesting deeper than 256 elements, huge text nodes) drop content beyond them;
+each limit hit is recorded in `parse_warnings`. Description, headings,
+microdata, warnings and errors are stored in `page.meta`, and every page
+records `parser_version`.
+
+Main text uses the region heuristics above rather than a separate
+main-content library (such as trafilatura): evidence quotes need the parser's
+own blocks and XPaths, and one heuristic does not justify several more
+dependencies. The replay corpus (Phase 15) is where its quality gets measured.
+
+## Raw document store
+
+The raw store keeps response bodies exactly as received, gzip-compressed and
+named by the SHA-256 of the original bytes (`fetch.raw_sha256`). Reads verify
+the hash. Two backends (`rawstore.backend`):
+
+- `filesystem`: `<root>/<aa>/<bb>/<sha256>.gz`, written to a temporary file,
+  fsynced and renamed.
+- `s3`: any S3-compatible service (AWS S3, MinIO, R2), keys
+  `<s3_prefix>sha256/<aa>/<bb>/<sha256>`. Credentials come from the standard
+  AWS chain (environment, profile, instance role), never from the config.
+
+A body is durable in the store before the database refers to it. Every
+stored body has an `artifact` row (hash, size, content type, format version
+`rawstore.ARTIFACT_VERSION`, first stored, pruned), written in the same
+transaction as the fetch, robots.txt snapshot or sitemap request that cites
+it; foreign keys keep the database from citing a document it has no record
+of.
+
+Retention (approved policy): documents that evidence cites and robots.txt
+snapshots are kept forever; everything else is deleted by `gtm-crawl
+--prune` once older than `rawstore.retention_days` (90). The artifact row
+stays with `pruned_at` set, so lineage still shows what was retrieved; storing
+the same body again clears it. Pruning also limits
+what `--reextract` can re-read, so prune only crawls you will not re-extract.
+
+## Replay and regression
+
+`gtm_crawler/replay.py` (spec sections 24, 25, 29) re-parses every page of a
+stored crawl from its raw artifact and runs the current extractors; nothing is
+fetched. It compares the result with the crawl's current extraction run:
+
+```bash
+gtm-crawl --replay 42                    # dry run: computed in memory, nothing written
+gtm-crawl --replay 42 --write            # new extraction run + re-assessment
+gtm-crawl --replay-all [--organization 7] [--write] --fail-on-change   # CI gate
+```
+
+The JSON report lists observations `added`, `removed` and `changed` (with
+per-field counts), old and new versions (`extraction.versions`), pages whose
+artifact is missing or pruned (`unreadable_pages`; their observations show as
+removed) and drafts the evidence checks refused (`rejected_drafts`). A write
+replay also lists field-state transitions (e.g. `founded_year` `SUPPORTED` ->
+`UNKNOWN`) between the latest assessment before and after. A dry run does not
+assess (assessing needs recorded observations) and writes no rows, not even
+products.
+
+Observations are matched on page URL, field, product slug, qualifier,
+verbatim and normalized value, evidence locator (type, locator, character
+span) and related organization; a match whose kind, extractor, extraction
+certainty or as-of date differs is `changed`. A bumped extractor version with
+identical output is not a change; it shows in `versions.changed`.
+
+Exit status: 2 for an unknown or unfinished crawl (`--replay`), 1 if any crawl
+in a batch failed (the batch goes on and records the error), 1 with
+`--fail-on-change` when any observation or field state changed, else 0.
+`--reextract ID` stays as the write path that prints the dossier instead of
+the comparison.
+
+Every extraction run records `trigger` (`crawl` or `replay`) and `versions`
+(`versions.current_versions`; NULL for runs made before migration 0014, i.e.
+unknown). A write replay supersedes the earlier run without deleting it, so
+lineage (`GET /v1/companies/{id}/lineage/{field}`) and the dossier trace to the
+new observations while the old ones stay queryable by `extraction_id`.
+
+## Crawl behaviour
+
+A crawl covers the seed's registrable domain including subdomains.
+
+1. robots.txt is loaded; if it is unreachable, nothing else is fetched and the
+   crawl is `failed`.
+2. Sitemaps seed the frontier; the seed URL is always fetched first.
+3. Up to `crawl.concurrency` URLs are processed at a time, claimed from
+   `crawl_url` by priority under a lease. Each is checked against robots.txt,
+   waits for its host's slot (`per_host_concurrency`, and a gap of at least
+   `min_delay_seconds` or the site's `Crawl-delay`, whichever is larger), then
+   is fetched. Redirects that leave the site are not followed. Timeouts,
+   network errors, 429 and 5xx go to `retry_wait` and are tried again after
+   `retry_delay_seconds` (or the server's `Retry-After`, if longer), up to
+   `max_url_attempts`; a 429 or 503 also holds back every request to that
+   host. Security rejections are `blocked` and never retried.
+   Rate control adapts per host (`gtm_crawler/throttle.py`): 429/503 halve
+   the host's concurrency and add an extra delay, timeouts and 5xx halve it,
+   slow responses (`slow_response_seconds`) lower it by one, and a run of
+   `rate_recover_after` fast responses raises it back. Crawl-delay is never
+   shortened; a Crawl-delay above `robots.max_crawl_delay_seconds` defers the
+   origin (`crawl_delay_too_long`) instead. After
+   `circuit_failure_threshold` failures in a row a host's circuit opens
+   (`gtm_crawler/breaker.py`): its URLs go back to `retry` for the cooldown
+   without using an attempt, then one probe decides whether it closes. Crawl
+   stats `rate_control` and `circuits` name the hosts affected.
+4. HTML responses are stored in the raw store, parsed (rendered in the
+   browser first if the HTML has too little text; see above), and saved as a
+   `page`.
+   A page whose text exactly matches, or nearly matches
+   (`near_duplicate_bits`), an earlier page is saved with
+   `duplicate_of_page_id` and its links are not followed.
+5. All links are saved. In-site links enter the frontier; external links are
+   recorded only, and profiles on `reference_domains` are flagged as
+   references. A same-site `rel=canonical` target is queued as well, and so
+   are URLs named by the page's JSON-LD (`url`, `@id`, `mainEntityOfPage`,
+   `sameAs`; recorded as links with rel `structured-data`). URLs the frontier
+   refuses are stored with the reason, up to `frontier.max_recorded_rejections`
+   per crawl: crawler traps as `trap`, depth and breadth budgets as
+   `deferred` (a deferred URL found again within budget becomes `eligible`).
+6. The crawl ends `completed` when the frontier is empty, `partial` when
+   `max_pages`, `max_bytes`, `max_duration_seconds` or `max_error_rate` stops
+   it first, `paused` when asked to stop (resumable), and `failed` when no
+   page could be fetched. Every URL's progress is kept in `crawl_url`:
+   `eligible` -> `leased` -> `fetching` -> `fetched` -> `parsed` ->
+   `processed` (duplicates too, with reason `duplicate`), or `blocked`
+   (robots.txt, network guard, off-site redirect; with the reason), `retry`
+   (retried later) or `failed`. A dead worker's `leased` to `parsed` URLs are
+   claimed again when their lease expires. Every attempt is kept in `fetch`,
+   with its duration (and, for browser renders, the
+   reason the render was triggered). Pages record the parser version.
+
+### Prioritization
+
+Each URL's score is the sum of named signals: GTM terms in its path
+(`high_value_terms` such as pricing, products, customers, about, press;
+`medium_value_terms` such as docs, blog, careers), the same terms in its link
+text and surrounding text, the topic of the page linking to it (its title
+and meta description), its sitemap priority, its freshness (sitemap
+`lastmod`, full credit today, none after `freshness_horizon_days`), its depth,
+and how many pages link to it; `low_value_terms` (tag, login, cart, ...)
+lower it. The breakdown is stored with the URL (`crawl_url.priority_signals`,
+always summing to `score`), so the crawl order can be explained. Terms only
+order the crawl; they never exclude an in-site URL. Weights and term lists
+are in `[priority]`.
+
+## Logging
+
+Logs are JSON, one object per line, with an event name and structured fields:
+
+```json
+{"ts": "...", "level": "INFO", "logger": "gtm_crawler.fetch", "event": "fetch.completed", "job_id": 7, "crawl_id": 12, "status": 200}
+```
+
+Every record logged while a job or crawl runs carries its `job_id` and
+`crawl_id` (correlation ids), including records from worker threads.
+Untrusted text cannot split a record (control characters, NEL, U+2028 and
+U+2029 are escaped), and configured secrets, URL user info
+(`https://***@host`, `https://***:***@host`) and bearer tokens are redacted.
+
+### Tracing
+
+Work is traced on the stdlib (`gtm_crawler/tracing.py`), with W3C Trace
+Context ids, and emitted through the same JSON log; no collector is needed.
+Each unit of work logs one `span` record when it ends: `http.request` (API,
+`/v1` only), `job.run`, `crawl.site`, `url.process`, `url.external`,
+`fetch.http`, `fetch.browser`, `parse`, `store`, `search.query`, `extract`,
+`assess`, `dossier.build`. A span record has `span`, `trace_id`, `span_id`,
+`parent_span_id`, `start`, `duration_ms`, `status` (`ok`/`error`), `error`
+(the exception class only) and the correlation fields `job_id`, `crawl_id`,
+`url`, `domain`, `worker`, `stage`; other attributes (HTTP status, provider,
+outcome) are under `attrs`. Every log line inside a span carries its
+`trace_id` and `span_id`. Page content is never put in a span, and span
+records are redacted like any log line.
+
+`POST /v1/crawls` continues an incoming `traceparent` header (an invalid one
+starts a new trace) and every `/v1` response returns one. A new job keeps its
+request's trace (in the `created` event of `crawl_event`) and the worker
+continues it, so the API request, the job, its crawls and every URL share one
+`trace_id`; asking for an existing job returns that job's `traceparent`.
+To follow one job:
+
+```sh
+jq -c 'select(.trace_id == "4bf92f3577b34da6a3ce929d0e0e4736" and .event == "span")
+       | {span, duration_ms, status, url, parent_span_id}' worker.log
+```
+
+`traceparent` is never sent to crawled sites: it would let third parties link
+our requests together and would leak internal ids. `[logging]
+trace_sample_rate` (default 1.0) is the share of new traces whose span records
+are logged; ids are always assigned and logged.
+
+## Metrics
+
+Prometheus metrics are served by the worker (`worker.metrics_host` /
+`metrics_port`, 127.0.0.1:9100 by default) and the API (`/metrics`):
+`crawl_jobs_total{status}`, `crawl_duration_seconds`, `urls_discovered_total`,
+`urls_fetched_total`, `http_requests_total{outcome}`,
+`http_request_duration_seconds`, `http_retries_total{kind}`,
+`blocked_requests_total{reason}`, `bytes_downloaded_total`,
+`browser_fallback_total{trigger,outcome}`, `pages_parsed_total`,
+`evidence_created_total`, `observations_created_total`, `field_unknown_total`,
+`field_conflict_total`, `frontier_depth`, `extraction_duration_seconds` and
+`db_query_duration_seconds`; cost accounting adds `cost_usd_total{kind}` and
+`resource_usage_total{kind,unit}`.
+
+## Cost accounting
+
+Spec section 27 (`gtm_crawler/cost.py`, table `cost_event`). When a job run
+ends, each of the job's site crawls (competitors included) is measured from
+what it recorded, and this run's database statement time is added:
+
+| kind | units | measured from |
+|---|---|---|
+| `http` | `requests`, `bytes` | fetch, robots.txt and sitemap rows; response body bytes |
+| `browser` | `renders`, `seconds`, `bytes` | browser fetch rows; render time and bytes from crawl stats |
+| `search` | `queries` (per provider) | answered `search_query` rows |
+| `storage` | `bytes` | raw artifacts the crawl references (uncompressed size) |
+| `worker` | `seconds` | crawl wall time (resumed crawls included) |
+| `database` | `seconds` | statement time of the job run (per run) |
+
+Each row is priced with `[cost]` (USD per unit; bytes per GB). **A price of 0
+(the default) means unknown: the quantity is recorded and its cost is 0.**
+Rows are keyed per crawl measurement and per run, so recording again after a
+retry, resume or lost lease updates rows instead of duplicating them. Limits:
+a run that dies before it records loses its database time; an artifact
+shared by several crawls counts for each; robots.txt body bytes are not
+counted. The job result (`GET /v1/crawls/{id}`), the dossier's `cost` block
+and `GET /v1/companies/{id}/cost` report the totals.
+
+Crawl quality (spec section 27; `quality.py`, observed once per job that
+finishes COMPLETED or FAILED): `crawl_urls_total{outcome}` (discovered,
+eligible, fetched, blocked, deferred, trapped), `pages_relevant_total`,
+`external_sources_total`, `crawl_duplicate_ratio`,
+`crawl_unique_content_yield`, `crawl_gaps_unanswered`; per assessment run
+`field_states_total{state}`; `search_requests_total{provider,outcome}`.
+For alerts: `worker_last_seen_timestamp_seconds`, `job_leases_expired_total`
+(a worker died or hung), `circuit_opened_total{breaker}` (host, search,
+browser), `database_up` (the scrape's queue queries answered),
+`browser_processes_resident_memory_bytes` (the worker's child processes,
+i.e. Playwright's driver and Chromium; Linux `/proc` only), plus the queue
+gauges `queue_jobs{state}`, `queue_urls{state}`, `dead_letter_open{entity}`.
+
+`deploy/prometheus/alerts.yml` alerts on queue starvation, stale or crashing
+workers, abandoned jobs, HTTP error spikes, dead-letter growth, slow or
+unreachable PostgreSQL, browser memory and crashes, search and browser
+outages, and targets down (scrape jobs `gtm-worker` and `gtm-api`).
+`deploy/grafana/crawl-health.json` is a dashboard of crawl health and
+quality (import it and pick the Prometheus data source). Every metric they
+use is checked against the code by `tests/test_quality_phase14.py`;
+thresholds are starting points.
+
+`GET /v1/crawls/{id}/quality` returns one job's quality report, computed
+from the database; the job's `result.quality` keeps it as it was when the
+job stopped. It has URL counts by outcome, HTTP errors by class, parsed,
+duplicate, unique and relevant pages (relevant: cited as evidence by the
+latest extraction), evidence and observations, the company's field states,
+external source domains, browser renders, search queries, bytes, fetch
+latency p50/p90/p99 by method (nearest rank over `fetch.duration_ms`),
+duplicate ratio, unique-content yield (unique pages / HTTP fetches) and
+completeness (frontier left, stop reasons, budget exhaustion, fields still
+open). `report_version` (also in the job's `versions`) changes whenever a
+definition does.
+
+## Testing
+
+```bash
+pytest                 # all tests; database tests need `docker compose up -d`
+pytest -m "not db"     # skip database tests
+pytest -m security     # adversarial security tests (docs/security-review.md)
+ruff check . && ruff format --check . && mypy
+```
+
+Database tests run against a separate `gtm_crawler_test` database (override
+with `GTM_TEST_DATABASE_URL`). The S3 backend is tested against an in-memory
+fake; set `GTM_TEST_S3_ENDPOINT` (e.g. `http://127.0.0.1:8333` from the
+compose `s3` service, with any `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`)
+to also test a real endpoint. They are skipped, and reported as skipped, if
+PostgreSQL is unreachable. Browser tests need `playwright install chromium`.
+
+No test touches the real Internet: sites, search, robots.txt and the
+optional model endpoint are simulated with `httpx.MockTransport`
+(market research: `tests/test_market.py`, offline; `tests/test_market_service.py`,
+PostgreSQL), and the browser tests route Chromium through the
+same mock (or through the real network guard, to prove it cannot reach
+private addresses).
+
+`tests/test_truthfulness.py` runs the whole pipeline against simulated sites
+and checks the dossier a user would read: a site without revenue yields
+`UNKNOWN` (even when a revenue page exists behind robots.txt); "we raised
+$10M" gives a funding round but `UNKNOWN` valuation and total funding;
+"more than 500 customers" is never 500 exactly; employee count is not turned
+into company size; prices are not turned into revenue; facts about other
+companies on the blog are not attributed; duplicates are not extra sources;
+an empty site is `UNKNOWN` throughout; a JavaScript site is rendered and
+cited; disagreeing sources are `CONFLICTING` with both citations; and every
+stored quote is re-verified against its raw document.
+
+### Artifact corpus
+
+`tests/corpus/<case>/` holds synthetic pages exactly as the raw store keeps
+them, so parser and extractor changes are regression-tested without
+re-crawling (spec sections 24, 29). Each case has `artifact.html` (the
+response body, byte for byte), `meta.json` (`url`, `content_type` header,
+`subject_domain`, `first_party`, `description`; optional `company_names`
+learned from the company's other pages, and `known_issue` for a truthfulness
+bug the golden currently records) and `expected.json`, the golden: parse
+facts plus every observation (value, normalized value, qualifier, product,
+relationship, quote and locator, certainty), sorted, with the parser and
+extractor versions that produced it. Every observation must pass
+`check_draft`, or the case fails.
+
+```bash
+python -m gtm_crawler.corpus                 # compare; prints a diff, exits 1 on mismatch
+python -m gtm_crawler.corpus --case NAME     # one case
+python -m gtm_crawler.corpus --update        # rewrite the goldens (also writes new cases')
+```
+
+To add a case, create the directory with `artifact.html` and `meta.json`,
+run `--update --case NAME`, and read `expected.json` critically before
+committing it. Version rule: output that changes must come with a version
+bump. If a golden differs while the responsible version is unchanged
+(`PARSER_VERSION` for parse facts; the extractor's `VERSION`, or the parser's,
+for its observations) the corpus fails with "bump it"; after bumping, review
+the diff and run `--update`. `tests/test_corpus_phase15.py` runs the corpus
+under pytest.
+
+A figure a sentence attributes to a third party ("LinkedIn lists Acme in the
+51-200 employees band", "according to Crunchbase, ...") keeps that attribution
+in its normalized value: `status: "reported"`, `reported_by: "LinkedIn"` (company
+and traction extractors; a company citing itself or its executives is not a
+report). Assessment needs no change for it: the claim's source is the page it
+was read from, so LinkedIn quoted on the company's site is a company-site claim,
+never an independent source.
+
+### Load testing
+
+`python -m gtm_crawler.loadtest <scenario|all> [--scale N] [--out results.json]`
+runs the real worker, pipeline and job API against a simulated web (spec
+sections 29, 32, 35): generated sites behind `httpx.MockTransport` with
+latency, jitter and injected 500s, a timed stand-in for Chromium, and a
+scripted search provider that can fail with 5xx, timeouts and 429. Scenarios:
+`deep_single_domain`, `many_domain`, `browser_heavy`, `provider_degradation`,
+`db_pressure`, `queue_pressure`, `crash_recovery`. Each prints PASS/FAIL per
+acceptance check and exits 1 on any failure; `--out` writes wall time,
+pages/s, fetch latency percentiles, peak memory, DB statement counts, queue
+depths and warnings as JSON. The scratch database (`GTM_LOAD_DATABASE_URL` or
+`--database-url`, default `gtm_crawler_load_scratch`) is dropped and recreated;
+names without "load" are refused. `tests/test_load_phase16.py` runs every
+scenario at small scale; `GTM_LOAD=1 pytest -m load` runs them at full scale.
+Measured results and what the simulation does not capture:
+[docs/load-results.md](docs/load-results.md).
+
+## Backup, restore and verification
+
+`python -m gtm_crawler.backup backup --out DIR` dumps PostgreSQL (`pg_dump
+-Fc`) and then copies the filesystem raw store (database first: bodies are
+stored before rows cite them), with a `manifest.json` (snapshot time, alembic
+revision, versions, dump SHA-256, raw object count). `python -m
+gtm_crawler.backup restore DIR` restores into an empty database, copies the raw
+store back, runs `alembic upgrade head` and verifies. `gtm-crawl --verify` is a
+read-only integrity check: every recorded raw document is present with a
+matching SHA-256, and every non-UNKNOWN field traces to observations, evidence,
+a page and its raw artifact; exit 1 on any problem. `pg_dump`/`pg_restore` run
+behind `GTM_PG_COMMAND_PREFIX` (e.g. `docker exec -i -e PGPASSWORD
+scraper10-postgres-1`). `python -m gtm_crawler.drill` is the automated restore
+drill (crawl, kill a worker mid-crawl, back up, destroy, restore, check the
+dossier, replay and resumption). RPO/RTO, measured times and the runbook:
+[docs/disaster-recovery.md](docs/disaster-recovery.md).

@@ -1,0 +1,10 @@
+{
+  "url": "https://reviews.example/acme-alternatives",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": false,
+  "description": "Third-party page titled 'Acme alternatives': listed items are competitor candidates (weak basis); the publisher's own 'we' statements are not about Acme.",
+  "company_names": [
+    "Acme"
+  ]
+}

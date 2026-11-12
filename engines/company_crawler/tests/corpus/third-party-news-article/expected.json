@@ -1,0 +1,87 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "traction",
+      "field": "funding_round",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 62,
+        "char_start": 0,
+        "locator": "/html/body/main/article/p[1]",
+        "locator_type": "xpath",
+        "text": "Acme raised $15M in Series B funding, led by Initech Ventures."
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 15000000.0,
+        "currency": "USD",
+        "qualifier": "eq",
+        "round": "series_b"
+      },
+      "value_verbatim": "$15M in Series B"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "traction",
+      "field": "investor",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 62,
+        "char_start": 0,
+        "locator": "/html/body/main/article/p[1]",
+        "locator_type": "xpath",
+        "text": "Acme raised $15M in Series B funding, led by Initech Ventures."
+      },
+      "related": {
+        "basis": "stated_investor",
+        "name": "Initech Ventures",
+        "type": "investor"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Initech Ventures"
+    }
+  ],
+  "page": {
+    "blocks": 4,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Acme lands $15M Series B"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 1,
+    "language": "en",
+    "links": [],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "22f8b2240e698e7a9f59160ba0008384d50889d5b1d588119dc3ac7e85fda4f8",
+    "title": "Acme lands $15M Series B - Daily Ledger",
+    "url": "https://news.example/2026/03/acme-series-b"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

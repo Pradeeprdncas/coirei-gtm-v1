@@ -1,0 +1,150 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.6,
+      "extractor": "product",
+      "field": "product_positioning",
+      "kind": "stated",
+      "product": "route-planner",
+      "qualifier": null,
+      "quote": {
+        "char_end": 56,
+        "char_start": 0,
+        "locator": "/html/body/main/p",
+        "locator_type": "xpath",
+        "text": "Route Planner sequences pick lists so pickers walk less."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Route Planner sequences pick lists so pickers walk less."
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "key_feature",
+      "kind": "stated",
+      "product": "route-planner",
+      "qualifier": null,
+      "quote": {
+        "char_end": 12,
+        "char_start": 0,
+        "locator": "/html/body/main/ul/li[2]",
+        "locator_type": "xpath",
+        "text": "Zone routing"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Zone routing"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "key_feature",
+      "kind": "stated",
+      "product": "route-planner",
+      "qualifier": null,
+      "quote": {
+        "char_end": 13,
+        "char_start": 0,
+        "locator": "/html/body/main/ul/li[1]",
+        "locator_type": "xpath",
+        "text": "Batch picking"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Batch picking"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.9,
+      "extractor": "product",
+      "field": "product_name",
+      "kind": "stated",
+      "product": "route-planner",
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "og:title[0]",
+        "locator_type": "meta",
+        "text": "Route Planner | Acme"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Route Planner"
+    }
+  ],
+  "page": {
+    "blocks": 7,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Plan every pick path in seconds"
+      ],
+      [
+        2,
+        "Capabilities"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "d8504441ce9e33803344bb2958b4f8fbb2ec4b9d015e537b11b31533092338ee",
+    "title": "Route Planner",
+    "url": "https://acme.example/products/route-planner"
+  },
+  "products": [
+    {
+      "basis": "product_page",
+      "name": "Route Planner",
+      "slug": "route-planner"
+    }
+  ],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

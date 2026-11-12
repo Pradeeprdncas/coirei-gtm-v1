@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/press/milestones",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Spec section 16: \"at least $20M to date\" is total funding with its lower bound kept; \"over $5 million\" ARR keeps \"gt\"; \"valued at more than $100M\" is a stated valuation.",
+  "company_names": [
+    "Acme"
+  ]
+}

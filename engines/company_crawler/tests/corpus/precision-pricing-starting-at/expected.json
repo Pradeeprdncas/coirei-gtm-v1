@@ -1,0 +1,208 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "plan_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 10,
+        "char_start": 0,
+        "locator": "/html/body/main/section[3]/h2",
+        "locator_type": "xpath",
+        "text": "Enterprise"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Enterprise"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "plan_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 6,
+        "char_start": 0,
+        "locator": "/html/body/main/section[2]/h2",
+        "locator_type": "xpath",
+        "text": "Growth"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Growth"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "plan_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 7,
+        "char_start": 0,
+        "locator": "/html/body/main/section[1]/h2",
+        "locator_type": "xpath",
+        "text": "Starter"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Starter"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "price",
+      "kind": "stated",
+      "product": null,
+      "qualifier": "Enterprise",
+      "quote": {
+        "char_end": 13,
+        "char_start": 0,
+        "locator": "/html/body/main/section[3]/p",
+        "locator_type": "xpath",
+        "text": "Contact sales"
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "value": "contact_sales"
+      },
+      "value_verbatim": "Contact sales"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "product",
+      "field": "price",
+      "kind": "stated",
+      "product": null,
+      "qualifier": "Growth",
+      "quote": {
+        "char_end": 23,
+        "char_start": 0,
+        "locator": "/html/body/main/section[2]/p",
+        "locator_type": "xpath",
+        "text": "$249/mo billed annually"
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 249.0,
+        "billing": "annual",
+        "currency": "USD",
+        "per": [
+          "month"
+        ],
+        "qualifier": "eq"
+      },
+      "value_verbatim": "$249/mo billed annually"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "product",
+      "field": "price",
+      "kind": "stated",
+      "product": null,
+      "qualifier": "Starter",
+      "quote": {
+        "char_end": 25,
+        "char_start": 0,
+        "locator": "/html/body/main/section[1]/p",
+        "locator_type": "xpath",
+        "text": "Starting at $99 per month"
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 99.0,
+        "currency": "USD",
+        "per": [
+          "month"
+        ],
+        "qualifier": "gte"
+      },
+      "value_verbatim": "Starting at $99 per month"
+    }
+  ],
+  "page": {
+    "blocks": 18,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Pricing"
+      ],
+      [
+        2,
+        "Starter"
+      ],
+      [
+        2,
+        "Growth"
+      ],
+      [
+        2,
+        "Enterprise"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "19959028e5864d7bfa91733571e0d97c2a7ca1bda2b8c3cfbf852f1df975f08b",
+    "title": "Pricing - Acme",
+    "url": "https://acme.example/pricing"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": "2026-09-01",
+      "certainty": 0.9,
+      "extractor": "signals",
+      "field": "job_opening",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "$.jsonld[0][0][\"title\"]",
+        "locator_type": "json_path",
+        "text": "Robotics Engineer"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Robotics Engineer"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    }
+  ],
+  "page": {
+    "blocks": 4,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Careers"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 4,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "04020c9d55764774ec144b3a04a054de490ac647394fd8b16b11cf3af6a70f66",
+    "title": "Careers - Acme",
+    "url": "https://acme.example/careers"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

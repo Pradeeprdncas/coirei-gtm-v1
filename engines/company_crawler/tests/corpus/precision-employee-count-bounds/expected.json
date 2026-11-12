@@ -1,0 +1,175 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "employee_count",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 43,
+        "char_start": 0,
+        "locator": "/html/body/main/p[3]",
+        "locator_type": "xpath",
+        "text": "Acme has nearly 300 team members worldwide."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "approx",
+        "value": 300
+      },
+      "value_verbatim": "nearly 300 team members"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "employee_count",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 44,
+        "char_start": 0,
+        "locator": "/html/body/main/p[2]",
+        "locator_type": "xpath",
+        "text": "We employ fewer than 50 employees in Europe."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "lt",
+        "value": 50
+      },
+      "value_verbatim": "fewer than 50 employees"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "employee_count",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 47,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "We have up to 250 employees during peak season."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "lte",
+        "value": 250
+      },
+      "value_verbatim": "up to 250 employees"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "employee_count",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 56,
+        "char_start": 0,
+        "locator": "/html/body/main/p[5]",
+        "locator_type": "xpath",
+        "text": "Our CEO Jane Doe says we are under 20 FTEs in Singapore."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "lt",
+        "value": 20
+      },
+      "value_verbatim": "under 20 FTEs"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "employee_count",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 58,
+        "char_start": 0,
+        "locator": "/html/body/main/p[4]",
+        "locator_type": "xpath",
+        "text": "According to Crunchbase, Acme has less than 400 employees."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "lt",
+        "reported_by": "Crunchbase",
+        "status": "reported",
+        "value": 400
+      },
+      "value_verbatim": "less than 400 employees"
+    }
+  ],
+  "page": {
+    "blocks": 8,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Life at Acme"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/about",
+      "https://acme.example/careers"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "10d3800fa032690edc6cc771e63bbc16c8af8e6eb299842aa22c9499d7d90000",
+    "title": "Life at Acme",
+    "url": "https://acme.example/careers/life-at-acme"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

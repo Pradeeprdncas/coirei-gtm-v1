@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/blog/inventory-benchmarks",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Plausible but unsupported: industry averages, other companies' figures and hypotheticals on the company's own blog must yield no traction or company facts.",
+  "company_names": [
+    "Acme"
+  ]
+}
