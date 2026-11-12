@@ -65,3 +65,6 @@ app.include_router(projects.router)
 app.include_router(competitors.router)
 
 app.include_router(intelligence_sync.router)
+
+from app.routers import conversation
+app.include_router(conversation.router)
