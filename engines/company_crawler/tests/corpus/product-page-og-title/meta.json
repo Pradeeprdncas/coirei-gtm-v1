@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/products/route-planner",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Product identified from og:title (\"Route Planner | Acme\") when the <h1> is a slogan.",
+  "company_names": [
+    "Acme"
+  ]
+}

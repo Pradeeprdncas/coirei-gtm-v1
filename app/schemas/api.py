@@ -59,7 +59,8 @@ class ChatInput(BaseModel):
 
 
 COMPANY_EDITABLE = {'name','website_url','description','industry','size_band','headquarters',
-                    'country','business_model','market_segment','value_proposition','icp','socials'}
+                    'country','employee_count','founded_year','business_model','market_segment',
+                    'value_proposition','icp','socials'}
 PRODUCT_EDITABLE = {'name','website_url','candidate_kind','category','product_type','description',
                     'key_features','main_use_case','business_model','pricing_status','positioning',
                     'value_proposition','target_market','icp'}

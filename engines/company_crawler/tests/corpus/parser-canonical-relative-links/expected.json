@@ -1,0 +1,65 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "founded_year",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 25,
+        "char_start": 0,
+        "locator": "/html/body/main/p",
+        "locator_type": "xpath",
+        "text": "Acme was founded in 2016."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "value": 2016
+      },
+      "value_verbatim": "2016"
+    }
+  ],
+  "page": {
+    "blocks": 2,
+    "canonical_url": "https://acme.example/about",
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "About"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en-us",
+    "links": [
+      "https://acme.example/company/team",
+      "https://acme.example/careers"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "cfc8173fd81d71b0cce2bd430741069ffcd23a1cb088e692a85ccef66f296abf",
+    "title": "About - Acme",
+    "url": "https://acme.example/company/about?utm_source=newsletter"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

@@ -215,6 +215,50 @@ async def candidate_sources(
     return result[:4]
 
 
+async def _load_intelligence_context(company_id: int) -> dict:
+    """Phase 3B: load intelligence data to enrich competitor queries."""
+    try:
+        from app.models.entities import Company
+        from app.models.intelligence import IntelligenceLink
+        async with Session() as db:
+            link = await db.get(IntelligenceLink, company_id)
+            if not link:
+                return {}
+            company = await db.get(Company, company_id)
+            if not company:
+                return {}
+
+        context = {}
+        if company.industry:
+            context["industry"] = company.industry
+        vp = company.value_proposition or {}
+        if vp.get("selling_points"):
+            context["selling_points"] = vp["selling_points"]
+        if vp.get("key_messages"):
+            context["key_messages"] = vp["key_messages"]
+        if vp.get("differentiators"):
+            context["differentiators"] = vp["differentiators"]
+        if vp.get("customer_evidence"):
+            customers = []
+            for ev in vp["customer_evidence"]:
+                if isinstance(ev, dict) and ev.get("type") == "customer":
+                    val = ev.get("value")
+                    if isinstance(val, list):
+                        customers.extend(str(v)[:100] for v in val[:5])
+                    elif isinstance(val, str):
+                        customers.append(val[:100])
+            if customers:
+                context["named_customers"] = customers[:5]
+        ms = company.market_segment or {}
+        if ms.get("target_segments"):
+            context["target_segments"] = ms["target_segments"]
+        if ms.get("target_industries"):
+            context["target_industries"] = ms["target_industries"]
+        return context
+    except Exception:
+        return {}
+
+
 async def process_discovery(job_id: int):
     async with Session() as db:
         job = await db.get(
@@ -241,6 +285,12 @@ async def process_discovery(job_id: int):
         raise ValueError(
             "Project is missing its verified snapshot"
         )
+
+    intelligence = await _load_intelligence_context(
+        company_id
+    )
+    if intelligence:
+        snapshot = {**snapshot, "intelligence": intelligence}
 
     # Phase 1: generate queries.
     await update_job(
@@ -459,7 +509,8 @@ async def process_discovery(job_id: int):
                     candidate.status = "failed"
                     candidate.explanation = (
                         f"Discovery failed: "
-                        f"{type(exc).__name__}"
+                        f"{type(exc).__name__}: "
+                        f"{str(exc)[:200]}"
                     )
                     await db.commit()
 

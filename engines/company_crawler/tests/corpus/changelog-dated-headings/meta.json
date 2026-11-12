@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/changelog",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Changelog index: dated headings become recent updates with their date; an undated heading stays unrecorded.",
+  "company_names": [
+    "Acme"
+  ]
+}

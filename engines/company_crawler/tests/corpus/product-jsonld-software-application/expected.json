@@ -1,0 +1,279 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.6,
+      "extractor": "product",
+      "field": "product_positioning",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": 66,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "Acme Stock turns nightly robot scans into a live inventory ledger."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Stock turns nightly robot scans into a live inventory ledger."
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "main_use_case",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": 14,
+        "char_start": 0,
+        "locator": "/html/body/main/ul[2]/li[1]",
+        "locator_type": "xpath",
+        "text": "Cycle counting"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Cycle counting"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "product",
+      "field": "main_use_case",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": 17,
+        "char_start": 0,
+        "locator": "/html/body/main/ul[2]/li[2]",
+        "locator_type": "xpath",
+        "text": "Audit preparation"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Audit preparation"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "traction",
+      "field": "product_sales",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": 47,
+        "char_start": 0,
+        "locator": "/html/body/main/p[2]",
+        "locator_type": "xpath",
+        "text": "We have shipped more than 3,000 robots to date."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "gt",
+        "value": 3000
+      },
+      "value_verbatim": "more than 3,000 robots"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "product",
+      "field": "product_description",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "description[0]",
+        "locator_type": "meta",
+        "text": "Live inventory from nightly robot scans."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Live inventory from nightly robot scans."
+    },
+    {
+      "as_of": null,
+      "certainty": 1.0,
+      "extractor": "product",
+      "field": "key_feature",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "$.jsonld[0][\"featureList\"][0]",
+        "locator_type": "json_path",
+        "text": "Shelf-level counts"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Shelf-level counts"
+    },
+    {
+      "as_of": null,
+      "certainty": 1.0,
+      "extractor": "product",
+      "field": "key_feature",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "$.jsonld[0][\"featureList\"][1]",
+        "locator_type": "json_path",
+        "text": "Discrepancy alerts"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Discrepancy alerts"
+    },
+    {
+      "as_of": null,
+      "certainty": 1.0,
+      "extractor": "product",
+      "field": "price",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": "Starter",
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "$.jsonld[0][\"offers\"][\"price\"]",
+        "locator_type": "json_path",
+        "text": "99.00"
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 99.0,
+        "currency": "USD",
+        "qualifier": "eq"
+      },
+      "value_verbatim": "99.00"
+    },
+    {
+      "as_of": null,
+      "certainty": 1.0,
+      "extractor": "product",
+      "field": "product_category",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "$.jsonld[0][\"applicationCategory\"]",
+        "locator_type": "json_path",
+        "text": "BusinessApplication"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "BusinessApplication"
+    },
+    {
+      "as_of": null,
+      "certainty": 1.0,
+      "extractor": "product",
+      "field": "product_name",
+      "kind": "stated",
+      "product": "stock",
+      "qualifier": null,
+      "quote": {
+        "char_end": null,
+        "char_start": null,
+        "locator": "$.jsonld[0][\"name\"]",
+        "locator_type": "json_path",
+        "text": "Acme Stock"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Stock"
+    }
+  ],
+  "page": {
+    "blocks": 12,
+    "canonical_url": null,
+    "description": "Live inventory from nightly robot scans.",
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Acme Stock"
+      ],
+      [
+        2,
+        "Features"
+      ],
+      [
+        2,
+        "Use cases"
+      ],
+      [
+        2,
+        "Results"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 2,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "b787ea504c36d8d48506a8f094a29a55093b22c928731e84c2ca0fdd8fbd67f7",
+    "title": "Acme Stock - Acme",
+    "url": "https://acme.example/products/stock"
+  },
+  "products": [
+    {
+      "basis": "json_ld:SoftwareApplication",
+      "name": "Acme Stock",
+      "slug": "stock"
+    }
+  ],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

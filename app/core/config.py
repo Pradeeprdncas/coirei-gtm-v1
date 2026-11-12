@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = 'http://localhost:5173,http://127.0.0.1:5173'
     ollama_base_url: str = 'http://127.0.0.1:11434/api'
     ollama_model: str = 'qwen2.5:3b-instruct'
-    ollama_api_key: str = '5ba8efe8d9b34a97a594f9179dff255e.K4S63-m9m1I4CaHR8q2R_zTW'
+    ollama_api_key: str = '84c245107b0b45f6a7d124d0c6138e31.QnIArHbWpODMI7vFtFBZ6yZr'
     llm_optional: bool = True
     scrape_max_pages: int = 12
     scrape_timeout_seconds: int = 12
@@ -26,9 +26,18 @@ class Settings(BaseSettings):
     )
     competitor_internal_token: str = ""
 
+    crawler_base_url: str = "http://127.0.0.1:8002"
+    crawler_service_token: str = ""
+
     competitor_max_queries: int = 5
     competitor_max_candidates: int = 10
     competitor_max_pages: int = 4
+
+    # Groq API — used by GTM Crawler for LLM extraction; exposed here so the
+    # main API can also call Groq if needed (e.g. faster gap-question generation).
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "openai/gpt-oss-20b"
 
 
 @lru_cache

@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/why-acme",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Stated competition and contrast; a customer co-mention and an integration are never competitors.",
+  "company_names": [
+    "Acme"
+  ]
+}

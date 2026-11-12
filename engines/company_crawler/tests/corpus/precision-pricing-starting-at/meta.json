@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/pricing",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Spec section 16: \"Starting at $99 per month\" is a lower bound (gte), never price = $99; \"Contact sales\" is not a number; \"up to 40%\" off must not become a price or a figure; \"$249/mo billed annually\" is per month with billing annual (the cycle is not a unit).",
+  "company_names": [
+    "Acme"
+  ]
+}

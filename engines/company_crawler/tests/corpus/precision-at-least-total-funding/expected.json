@@ -1,0 +1,135 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "traction",
+      "field": "arr",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 40,
+        "char_start": 0,
+        "locator": "/html/body/main/p[2]",
+        "locator_type": "xpath",
+        "text": "Our ARR grew to over $5 million in 2025."
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 5000000.0,
+        "currency": "USD",
+        "qualifier": "gt",
+        "year": 2025
+      },
+      "value_verbatim": "over $5 million"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "traction",
+      "field": "total_funding",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 38,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "Acme has raised at least $20M to date."
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 20000000.0,
+        "currency": "USD",
+        "qualifier": "gte"
+      },
+      "value_verbatim": "at least $20M to date"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "traction",
+      "field": "valuation",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 110,
+        "char_start": 54,
+        "locator": "/html/body/main/p[3]",
+        "locator_type": "xpath",
+        "text": "Acme was valued at more than $100M after its last round."
+      },
+      "related": null,
+      "value_normalized": {
+        "amount": 100000000.0,
+        "basis": null,
+        "currency": "USD",
+        "qualifier": "gt"
+      },
+      "value_verbatim": "more than $100M"
+    }
+  ],
+  "page": {
+    "blocks": 6,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Company milestones"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "15315c95d6f49bef825c8c5ef559b6553687ee7f93e25be835a932b69c6f8d7e",
+    "title": "Milestones - Acme",
+    "url": "https://acme.example/press/milestones"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

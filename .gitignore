@@ -6,3 +6,12 @@ __pycache__/
 data/sources/
 data/uploads/
 .DS_Store
+
+
+engines/company_crawler/.venv/
+engines/company_crawler/config.toml
+engines/company_crawler/.env
+
+.run-logs/
+data/competitors/
+.run-logs/

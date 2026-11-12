@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/customers",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Spec section 16: \"more than 500 customers\" keeps its qualifier; \"nearly 1,200 businesses rely on Acme\"; \"2,000+ teams\" is a lower bound.",
+  "company_names": [
+    "Acme"
+  ]
+}

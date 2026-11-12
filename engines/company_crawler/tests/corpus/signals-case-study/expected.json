@@ -1,0 +1,121 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "customer",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 41,
+        "char_start": 0,
+        "locator": "/html/body/main/p",
+        "locator_type": "xpath",
+        "text": "Our customers include Globex and Initech."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Globex"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "customer",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 41,
+        "char_start": 0,
+        "locator": "/html/body/main/p",
+        "locator_type": "xpath",
+        "text": "Our customers include Globex and Initech."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Initech"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.85,
+      "extractor": "signals",
+      "field": "case_study",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 32,
+        "char_start": 0,
+        "locator": "/html/body/main/h1",
+        "locator_type": "xpath",
+        "text": "How Globex cut count time by 80%"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "How Globex cut count time by 80%"
+    }
+  ],
+  "page": {
+    "blocks": 4,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "How Globex cut count time by 80%"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "b442fc8123ea86e0b4b7440ec6f0016a3ba69ab553a36d911b727bd4d8878918",
+    "title": "Globex case study - Acme",
+    "url": "https://acme.example/customers/globex"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

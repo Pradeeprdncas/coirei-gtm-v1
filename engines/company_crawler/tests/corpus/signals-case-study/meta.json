@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/customers/globex",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Case-study page: the <h1> is the case study; a customer named in a sentence.",
+  "company_names": [
+    "Acme"
+  ]
+}

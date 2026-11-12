@@ -21,6 +21,88 @@ from app.services.gap_suggestions import (
     question_template,
 )
 
+
+def _intel_context(company: Company, products: list[Product]) -> dict:
+    """Distill already-synced intelligence into a compact dict for prompt injection."""
+    ctx: dict = {}
+    if company.description:
+        ctx["description"] = company.description[:300]
+    if company.industry:
+        ctx["industry"] = company.industry
+    vp = company.value_proposition or {}
+    if vp.get("selling_points"):
+        ctx["selling_points"] = vp["selling_points"][:3]
+    if vp.get("product_positioning") or vp.get("summary"):
+        ctx["positioning"] = (vp.get("product_positioning") or vp.get("summary"))[:200]
+    ms = company.market_segment or {}
+    if ms.get("main_use_case"):
+        ctx["use_cases"] = ms["main_use_case"][:5]
+    if ms.get("target_segments"):
+        ctx["target_segments"] = ms["target_segments"]
+    bm = company.business_model or {}
+    if bm.get("customer_type"):
+        ctx["customer_type"] = bm["customer_type"]
+    if bm.get("revenue_model"):
+        ctx["revenue_model"] = bm["revenue_model"]
+    if bm.get("price"):
+        ctx["published_prices"] = bm["price"][:4]
+    if bm.get("plan_name"):
+        ctx["plan_names"] = bm["plan_name"][:4]
+    icp = company.icp or {}
+    if icp.get("icp_hypotheses"):
+        ctx["icp_hypotheses"] = icp["icp_hypotheses"][:2]
+    if company.socials:
+        ctx["has_contact_info"] = True
+    for p in products:
+        if p.candidate_kind in ("standalone_product", "suite") and p.description:
+            ctx.setdefault("known_products", []).append(
+                {"name": p.name, "description": p.description[:120]}
+            )
+    return ctx
+
+
+def _intel_aware_question(field_key: str, product_name: str, ctx: dict) -> str:
+    """Return a richer question that references what we already know."""
+    kind = field_key.rsplit(".", 1)[-1]
+    company_name = ""
+    if ctx.get("description"):
+        # extract implied company type from description
+        company_name = ""
+
+    if kind == "icp":
+        if ctx.get("use_cases"):
+            uses = ", ".join(str(u) for u in ctx["use_cases"][:3])
+            return f"Based on your use cases ({uses}), who specifically is your ideal customer — their role, company size, and industry?"
+        if ctx.get("selling_points"):
+            sp = ctx["selling_points"][0]
+            return f"Your platform {sp[:80]}. Who specifically is the ideal customer you built this for?"
+        return "Who is your ideal customer — their role, company size, and the specific problem they hire you to solve?"
+
+    if kind == "business_model":
+        if ctx.get("plan_names") or ctx.get("published_prices"):
+            plans = ", ".join(str(p) for p in (ctx.get("plan_names") or []))
+            prices = ", ".join(str(p) for p in (ctx.get("published_prices") or []))
+            return f"We found plan names ({plans}) and prices ({prices}) on your site. What is the full pricing model — subscription tiers, usage-based fees, or enterprise contracts?"
+        return "How do you charge customers — subscription, usage-based, one-time, or enterprise contract?"
+
+    if kind == "key_features":
+        if ctx.get("use_cases"):
+            uses = ctx["use_cases"][0]
+            return f"{product_name} supports use cases like '{uses}'. What are its 3–5 key features that deliver these outcomes?"
+        return f"What are the 3–5 key capabilities that make {product_name} valuable to customers?"
+
+    if kind == "main_use_case":
+        if ctx.get("description"):
+            return f"You described your platform as: '{ctx['description'][:120]}'. What is the single most important use case customers rely on {product_name} for?"
+        return f"What is the primary job customers hire {product_name} to do?"
+
+    if kind == "description":
+        if ctx.get("industry"):
+            return f"In the {ctx['industry']} space, how would you describe {product_name} in 1–2 sentences for a first-time visitor?"
+        return f"How would you describe {product_name} in 1–2 sentences for someone who has never heard of it?"
+
+    return question_template(field_key, product_name)
+
 from typing import Any
 
 router = APIRouter(prefix='/companies', tags=['onboarding'])
@@ -332,6 +414,7 @@ async def generate_gap(
     needed = missing_fields(company, products)
 
     products_by_id = {p.id: p for p in products}
+    intel_ctx = _intel_context(company, list(products))
 
     # Load old questions, but do not automatically reuse them.
     existing = (
@@ -389,9 +472,8 @@ async def generate_gap(
             product.name if product else "this product"
         )
 
-        question_text = question_template(
-            field_key,
-            product_name,
+        question_text = _intel_aware_question(
+            field_key, product_name, intel_ctx
         )
 
         old_question = existing_by_key.get(field_key)
@@ -426,16 +508,25 @@ async def generate_gap(
                 for p in passages[:7]
             )
 
+            intel_summary = ""
+            if intel_ctx:
+                intel_summary = (
+                    f"Company intelligence (already known, use to write specific suggestions):\n"
+                    f"{json.dumps(intel_ctx, default=str)[:800]}\n\n"
+                )
+
             ai = await json_completion(
                 (
-                    "Return JSON only. Generate up to three "
-                    "answers for the specified missing field. "
-                    "Use only the evidence provided. "
-                    "Every suggestion must have an exact "
-                    "supporting quote and source_id. "
-                    "Do not invent information."
+                    "Return JSON only. Generate up to three specific, "
+                    "actionable answer suggestions for the missing field. "
+                    "Use the company intelligence context to make suggestions "
+                    "concrete — reference the company's own products, use cases, "
+                    "and terminology. Every suggestion MUST cite an exact quote "
+                    "from the evidence with its source_id. "
+                    "Do not invent information not in the evidence."
                 ),
                 (
+                    f"{intel_summary}"
                     f"Field={field_key}\n"
                     f"Question={question_text}\n"
                     f"Evidence:\n{evidence}\n"

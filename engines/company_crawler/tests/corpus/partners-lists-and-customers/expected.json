@@ -1,0 +1,243 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "signals",
+      "field": "customer",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 40,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "Trusted by Globex, Initech and Umbrella."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Globex"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "signals",
+      "field": "customer",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 40,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "Trusted by Globex, Initech and Umbrella."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Initech"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "signals",
+      "field": "customer",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 40,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "Trusted by Globex, Initech and Umbrella."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Umbrella"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "traction",
+      "field": "partnership",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 19,
+        "char_start": 0,
+        "locator": "/html/body/main/ul[2]/li",
+        "locator_type": "xpath",
+        "text": "Kramerica Logistics"
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "type": "channel"
+      },
+      "value_verbatim": "Kramerica Logistics"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.75,
+      "extractor": "traction",
+      "field": "technology_partnership",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 12,
+        "char_start": 0,
+        "locator": "/html/body/main/ul[1]/li[1]",
+        "locator_type": "xpath",
+        "text": "Vandelay WMS"
+      },
+      "related": {
+        "basis": "partner_page",
+        "name": "Vandelay WMS",
+        "type": "tech_partner"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Vandelay WMS"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.75,
+      "extractor": "traction",
+      "field": "technology_partnership",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 13,
+        "char_start": 0,
+        "locator": "/html/body/main/ul[1]/li[2]",
+        "locator_type": "xpath",
+        "text": "Soylent Cloud"
+      },
+      "related": {
+        "basis": "partner_page",
+        "name": "Soylent Cloud",
+        "type": "tech_partner"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Soylent Cloud"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "traction",
+      "field": "technology_partnership",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 35,
+        "char_start": 0,
+        "locator": "/html/body/main/p[3]",
+        "locator_type": "xpath",
+        "text": "Acme is a Vandelay Premier Partner."
+      },
+      "related": {
+        "basis": "partner_badge",
+        "name": "Vandelay",
+        "type": "tech_partner"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Vandelay"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.9,
+      "extractor": "company",
+      "field": "contact_email",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 21,
+        "char_start": 0,
+        "locator": "/html/body/main/ul[3]/li",
+        "locator_type": "xpath",
+        "text": "partners@acme.example"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "partners@acme.example"
+    }
+  ],
+  "page": {
+    "blocks": 13,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Partners"
+      ],
+      [
+        2,
+        "Technology partners"
+      ],
+      [
+        2,
+        "Channel partners"
+      ],
+      [
+        2,
+        "Contact"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "cd9d4393cd86903f3389e564f7754e8b40bcf65d862ebe7aabb38cdd4a4df2b7",
+    "title": "Partners - Acme",
+    "url": "https://acme.example/partners"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

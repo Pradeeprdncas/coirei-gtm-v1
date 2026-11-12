@@ -1,0 +1,313 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.6,
+      "extractor": "company",
+      "field": "business_model",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 91,
+        "char_start": 34,
+        "locator": "/html/body/main/p[3]",
+        "locator_type": "xpath",
+        "text": "We are a B2B robotics company for the logistics industry."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "value": "b2b"
+      },
+      "value_verbatim": "B2B"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.6,
+      "extractor": "company",
+      "field": "market_domain",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 91,
+        "char_start": 34,
+        "locator": "/html/body/main/p[3]",
+        "locator_type": "xpath",
+        "text": "We are a B2B robotics company for the logistics industry."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "logistics"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "company_location",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 91,
+        "char_start": 0,
+        "locator": "/html/body/main/p[2]",
+        "locator_type": "xpath",
+        "text": "Today we have over 120 employees and we are based in Austin with a second office in Berlin."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Austin"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "company_size",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 49,
+        "char_start": 0,
+        "locator": "/html/body/main/p[6]",
+        "locator_type": "xpath",
+        "text": "LinkedIn lists Acme in the 51-200 employees band."
+      },
+      "related": null,
+      "value_normalized": {
+        "max": 200,
+        "min": 51,
+        "qualifier": "range",
+        "reported_by": "LinkedIn",
+        "status": "reported"
+      },
+      "value_verbatim": "51-200 employees"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "employee_count",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 91,
+        "char_start": 0,
+        "locator": "/html/body/main/p[2]",
+        "locator_type": "xpath",
+        "text": "Today we have over 120 employees and we are based in Austin with a second office in Berlin."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "gt",
+        "value": 120
+      },
+      "value_verbatim": "over 120 employees"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "founded_year",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 52,
+        "char_start": 0,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "Acme was founded in 2016 by two warehouse engineers."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "value": 2016
+      },
+      "value_verbatim": "2016"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "company",
+      "field": "headquarters",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 91,
+        "char_start": 53,
+        "locator": "/html/body/main/p[1]",
+        "locator_type": "xpath",
+        "text": "We are headquartered in Austin, Texas."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Austin, Texas"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "office_location",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 48,
+        "char_start": 0,
+        "locator": "/html/body/main/p[4]",
+        "locator_type": "xpath",
+        "text": "We have offices in Austin, Berlin and Singapore."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Austin"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "office_location",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 48,
+        "char_start": 0,
+        "locator": "/html/body/main/p[4]",
+        "locator_type": "xpath",
+        "text": "We have offices in Austin, Berlin and Singapore."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Berlin"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "office_location",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 48,
+        "char_start": 0,
+        "locator": "/html/body/main/p[4]",
+        "locator_type": "xpath",
+        "text": "We have offices in Austin, Berlin and Singapore."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Singapore"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "open_roles",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 55,
+        "char_start": 0,
+        "locator": "/html/body/main/p[5]",
+        "locator_type": "xpath",
+        "text": "We have 14 open positions across engineering and sales."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "value": 14
+      },
+      "value_verbatim": "14 open positions"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.85,
+      "extractor": "company",
+      "field": "ownership_type",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 33,
+        "char_start": 0,
+        "locator": "/html/body/main/p[3]",
+        "locator_type": "xpath",
+        "text": "Acme is a privately held company."
+      },
+      "related": null,
+      "value_normalized": {
+        "qualifier": "eq",
+        "value": "private"
+      },
+      "value_verbatim": "privately held"
+    }
+  ],
+  "page": {
+    "blocks": 9,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "About Acme"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "fb7e6e1d19ac28bb1703b6f1207ac547bc5a0359d2234b7ac4dc019224f12589",
+    "title": "About Acme",
+    "url": "https://acme.example/about"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

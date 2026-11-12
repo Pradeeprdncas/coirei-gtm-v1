@@ -80,9 +80,10 @@ async def source_from_text(db: AsyncSession, company_id: int, kind: str, url: st
 
 async def add_claim(db: AsyncSession, company_id: int, product_id: int | None, field: str,
                     value, source: Source | None, quote: str | None, status: str = 'evidence'):
-    if source is not None and quote and quote.casefold() not in source.text.casefold():
-        if status != 'structured' or quote.casefold() not in __import__('json').dumps(source.structured or {}).casefold():
-            return False
+    if source is not None and quote and status not in ('intelligence',):
+        if quote.casefold() not in source.text.casefold():
+            if status != 'structured' or quote.casefold() not in __import__('json').dumps(source.structured or {}).casefold():
+                return False
     if source is None and status == 'evidence':
         return False
     db.add(FieldClaim(company_id=company_id, product_id=product_id, field_key=field,

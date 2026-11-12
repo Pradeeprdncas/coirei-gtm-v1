@@ -1,0 +1,83 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.8,
+      "extractor": "signals",
+      "field": "integration",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 19,
+        "char_start": 0,
+        "locator": "/html/body/main/h1",
+        "locator_type": "xpath",
+        "text": "Acme + Vandelay WMS"
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Vandelay WMS"
+    }
+  ],
+  "page": {
+    "blocks": 4,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Acme + Vandelay WMS"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "de8b24bf4deecbb685b674c3ecd1d0086cf2ec85cc7561f6f9e28e455a0ebb2b",
+    "title": "Acme + Vandelay WMS",
+    "url": "https://acme.example/integrations/vandelay-wms"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

@@ -141,21 +141,17 @@ async def crawl_competitor(
         try:
             response = await client.get(robots_url)
 
-            if response.status_code in (404, 410):
-                robots.parse([])
-            elif response.status_code == 200:
+            if response.status_code == 200:
                 if len(response.content) > 1_000_000:
-                    raise ValueError("robots.txt too large")
-
-                robots.parse(response.text.splitlines())
+                    robots.parse([])
+                else:
+                    robots.parse(response.text.splitlines())
             else:
-                raise ValueError(
-                    "Robots policy unavailable"
-                )
-        except httpx.HTTPError as exc:
-            raise ValueError(
-                "Could not read robots.txt"
-            ) from exc
+                # 404, 403, 503, etc. — treat as no restrictions.
+                robots.parse([])
+        except httpx.HTTPError:
+            # Network error fetching robots.txt — treat as no restrictions.
+            robots.parse([])
 
         delay = max(
             float(robots.crawl_delay(AGENT) or 0),

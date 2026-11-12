@@ -1,0 +1,93 @@
+[project]
+name = "gtm-crawler"
+version = "0.1.0"
+description = "Evidence-first company intelligence crawler for GTM dossiers."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "SQLAlchemy>=2.0,<2.1",
+    "alembic>=1.13,<2",
+    "psycopg[binary]>=3.2,<4",
+    "tldextract>=5.3,<6",
+    # 0.28.x: netguard installs its connection guard through httpcore internals.
+    "httpx>=0.28.1,<0.29",
+    "protego>=0.3,<1",
+    "lxml>=5,<7",
+    # Browser fallback. Chromium itself: `playwright install chromium`.
+    "playwright>=1.49,<2",
+    # Job API and worker metrics (approved 2026-09-29).
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    "prometheus-client>=0.20,<1",
+    # S3-compatible raw store (AWS S3, MinIO, R2).
+    "boto3>=1.34,<2",
+    # Market-research models (already required by FastAPI; pinned here as a direct use).
+    "pydantic>=2.7,<3",
+]
+
+[project.scripts]
+gtm-crawl = "gtm_crawler.cli:main"
+gtm-worker = "gtm_crawler.worker:main"
+gtm-api = "gtm_crawler.api:main"
+gtm-market = "gtm_crawler.market.runner:main"
+
+[project.optional-dependencies]
+# OCR of images in market research (market.ocr_enabled; also needs the Tesseract binary).
+ocr = ["pytesseract>=0.3.10,<1", "Pillow>=10,<12"]
+# Text PDFs in market research (market.pdf_enabled; pdfplumber reads text, layout and
+# ruled tables through pdfminer.six). Without it PDFs are recorded as not readable.
+pdf = ["pdfplumber>=0.11,<0.12"]
+# HTTP/2 (fetch.http2 = true; approved as opt-in 2026-09-29).
+http2 = ["h2>=4.1,<5"]
+dev = [
+    "h2>=4.1,<5",
+    # In-memory TLS certificates for the local HTTPS/HTTP/2 test servers.
+    "trustme>=1.1",
+    "pytest>=8,<9",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "boto3-stubs[s3]>=1.34",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gtm_crawler*"]
+
+[tool.setuptools.package-data]
+gtm_crawler = ["db/migrations/*.py", "db/migrations/*.mako", "db/migrations/versions/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "db: requires a running PostgreSQL (see README)",
+    "security: adversarial security tests (spec 28, 29); also run by default",
+    "load: full-scale load scenarios (spec section 29); run with GTM_LOAD=1",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# Table names in test SQL come from a fixed parametrize list, not input.
+"tests/**" = ["S608"]
+# Generated migrations embed constraint SQL verbatim.
+"gtm_crawler/db/migrations/versions/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+packages = ["gtm_crawler"]
+exclude = ["gtm_crawler/db/migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["lxml", "lxml.*", "protego"]
+ignore_missing_imports = true

@@ -1,0 +1,87 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.7,
+      "extractor": "company",
+      "field": "legal_name",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 46,
+        "char_start": 0,
+        "locator": "/html/body/footer/p",
+        "locator_type": "xpath",
+        "text": "© 2026 Acme Robotics Inc. All rights reserved."
+      },
+      "related": null,
+      "value_normalized": null,
+      "value_verbatim": "Acme Robotics Inc"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.85,
+      "extractor": "competitor",
+      "field": "competitor",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 14,
+        "char_start": 0,
+        "locator": "/html/body/main/h1",
+        "locator_type": "xpath",
+        "text": "Acme vs Globex"
+      },
+      "related": {
+        "basis": "comparison_page",
+        "name": "Globex",
+        "type": "competitor"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Globex"
+    }
+  ],
+  "page": {
+    "blocks": 4,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Acme vs Globex"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [
+      "https://acme.example/",
+      "https://acme.example/products/stock",
+      "https://acme.example/pricing",
+      "https://acme.example/about"
+    ],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "b998e95a72f52f323535006be8ec29aa2cc59c001ed7678c736dd7e01433bf41",
+    "title": "Acme vs Globex",
+    "url": "https://acme.example/vs/globex"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

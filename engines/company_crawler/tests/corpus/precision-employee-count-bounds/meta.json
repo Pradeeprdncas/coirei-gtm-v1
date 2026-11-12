@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/careers/life-at-acme",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Spec section 16: employee counts keep their bounds with the same qualifiers as other counts: \"up to 250\" is lte, \"fewer than 50\" / \"less than 400\" are lt, \"nearly 300\" is approx; \"according to Crunchbase\" is reported by Crunchbase; a figure quoted from the company's own CEO is not a third-party report.",
+  "company_names": [
+    "Acme"
+  ]
+}
