@@ -1,0 +1,252 @@
+# Copy to config.toml and adjust. Any key can be overridden by an environment
+# variable of the form GTM__<SECTION>__<KEY>, e.g. GTM__DATABASE__URL.
+
+[database]
+url = "postgresql+psycopg://SkyneTBee:@127.0.0.1:5432/coirei_intelligence"
+
+[logging]
+level = "INFO"
+# Share of new traces whose span records are logged (0.0-1.0). Trace ids are
+# always assigned and logged; this only thins the per-stage span lines.
+trace_sample_rate = 1.0
+
+[urls]
+# Tracking/session parameters removed during normalization (fnmatch patterns).
+# strip_params = ["utm_*", "gclid", "fbclid", "jsessionid"]
+index_files = ["index.html", "index.htm"]
+strip_trailing_slash = false
+
+[frontier]
+max_depth = 8
+max_queue_size = 50000
+max_url_length = 2048
+max_path_segments = 12
+max_query_params = 8
+max_segment_repeats = 3
+max_urls_per_pattern = 50
+max_urls_per_prefix = 500
+
+[identity]
+product_token = "GTMCrawler"
+# Required: a URL or email where site operators can reach you. Sent in the
+# User-Agent header. The crawler refuses to fetch without it.
+user_agent_contact = "pradeep824567@gmail.com"
+
+[fetch]
+connect_timeout = 10.0      # TCP + TLS
+ttfb_timeout = 30.0         # request sent -> response headers
+read_timeout = 20.0
+write_timeout = 20.0
+attempt_timeout = 60.0
+max_redirects = 5
+max_retries = 3
+backoff_base = 1.0
+backoff_max = 30.0
+max_retry_after = 120.0
+max_body_bytes = 10485760
+max_decompression_ratio = 100.0
+decompression_ratio_min_bytes = 1048576
+allowed_ports = [80, 443]
+# Explicitly allowed non-public networks (deployment policy); metadata
+# endpoints stay refused. Empty = public addresses only.
+allowed_networks = []
+dns_cache_seconds = 300.0
+dns_cache_size = 1024
+conditional_requests = true
+http2 = false               # needs: pip install ".[http2]"
+
+[robots]
+max_bytes = 524288
+max_age_seconds = 86400.0   # RFC 9309: reload rules after at most 24 hours
+
+[sitemaps]
+max_sitemaps = 50
+max_urls = 50000
+max_index_depth = 3
+
+[parse]
+max_links = 5000
+max_blocks = 20000
+link_context_chars = 200
+timeout_seconds = 30.0
+
+[rawstore]
+# "filesystem" (under root) or "s3" (AWS S3, MinIO, R2). S3 credentials come
+# from the standard AWS environment/profile/role chain, never from this file.
+backend = "filesystem"
+root = "data/raw"
+# Documents that evidence cites and robots.txt snapshots are kept forever;
+# others are deleted by `gtm-crawl --prune` after this many days.
+retention_days = 90
+# s3_bucket = "gtm-raw"
+# s3_prefix = ""
+# s3_endpoint_url = "http://127.0.0.1:8333"   # local compose `s3` service; empty for AWS
+# s3_region = ""
+# Backups (python -m gtm_crawler.backup) copy the filesystem store; for s3 use
+# bucket versioning/replication instead. pg_dump/pg_restore run behind the
+# GTM_PG_COMMAND_PREFIX environment variable, e.g.
+# "docker exec -i -e PGPASSWORD scraper10-postgres-1" (docs/disaster-recovery.md).
+
+[crawl]
+max_pages = 1000
+max_duration_seconds = 3600
+concurrency = 8
+per_host_concurrency = 2
+min_delay_seconds = 0.5
+max_error_rate = 0.5
+error_rate_min_fetches = 20
+near_duplicate_bits = 3
+max_bytes = 524288000
+# URLs are claimed under a lease; a dead worker's URLs are claimed again after it.
+lease_seconds = 600
+# Attempts per URL for timeouts, 429 and 5xx (after the fetcher's own retries).
+max_url_attempts = 2
+retry_delay_seconds = 60.0
+checkpoint_seconds = 10.0
+# reference_domains = ["linkedin.com", "crunchbase.com", "g2.com", ...]
+
+[priority]
+# high_value_terms / medium_value_terms / low_value_terms: see gtm_crawler/config.py
+path_weight = 4.0
+anchor_weight = 3.0
+context_weight = 1.0
+sitemap_weight = 1.0
+depth_weight = 2.0
+inlink_weight = 0.5
+low_value_penalty = 4.0
+
+[browser]
+# Headless Chromium fallback for JavaScript-rendered pages. Needs the browser
+# binary once per machine: `playwright install chromium`.
+enabled = false
+min_text_chars = 250
+max_renders = 100
+concurrency = 2
+render_timeout = 30.0
+settle_timeout = 5.0
+# Chromium's own OS sandbox. On Linux it needs unprivileged user namespaces;
+# in Docker run the worker with deploy/chrome-seccomp.json (docker-compose.yml
+# does). staging/prod refuse sandbox = false unless allow_unsandboxed = true.
+sandbox = true
+allow_unsandboxed = false
+
+[sources]
+# Third-party domains by source tier; first-party pages are always tier 1 and
+# unlisted third parties tier 4. Defaults: see gtm_crawler/config.py.
+# regulatory_domains = ["sec.gov", "companieshouse.gov.uk", ...]            # tier 1
+# business_database_domains = ["crunchbase.com", "pitchbook.com", ...]      # tier 2
+# major_publication_domains = ["reuters.com", "bloomberg.com", ...]        # tier 2
+# industry_publication_domains = []                                         # tier 3
+# professional_profile_domains = ["linkedin.com", "github.com"]             # tier 3
+
+[search]
+# Exa web search. Leave api_key empty here and set GTM__SEARCH__API_KEY in the
+# environment; the key is never stored with crawl records. Empty = no search.
+api_key = ""
+endpoint = "https://api.exa.ai/search"
+timeout = 20.0
+results_per_query = 10
+
+[external]
+# Pages fetched outside the company's site after the crawl: reference profiles
+# the site links to (or search returns for this exact company), search results
+# for the fields the site left open, and competitor discovery. Links on
+# external pages are recorded, never followed. robots.txt and the network
+# guard still apply.
+enabled = true
+max_search_pages = 20
+max_reference_pages = 10
+# Competitor discovery, every crawl: queries sent, result pages fetched, and
+# how many known competitors a second round asks about (0 turns each off).
+max_competitor_queries = 30
+max_competitor_search_pages = 60
+second_hop_competitors = 5
+# Competitors' own sites, once their domain is known (see README).
+max_competitor_crawls = 5
+competitor_max_pages = 30
+
+[assessment]
+# Field-assessment thresholds (method fa-v2). Other values are recorded in
+# each assessment's method_version. verified_confidence is the CORROBORATED
+# threshold, found_confidence the SUPPORTED one.
+verified_confidence = 0.80
+found_confidence = 0.60
+# A time-varying figure whose newest evidence is older than this is STALE.
+stale_after_days = 730
+
+[worker]
+# Job lease, renewed every lease_seconds / 3 by heartbeat.
+lease_seconds = 60.0
+poll_seconds = 2.0
+max_job_attempts = 5
+metrics_host = "127.0.0.1"
+# Alert rules and a Grafana dashboard for these: deploy/prometheus, deploy/grafana.
+metrics_port = 9100
+
+[cost]
+# Unit prices in USD (spec section 27). 0 = unknown: usage is still recorded,
+# its cost is 0. Byte quantities are priced per GB (10^9 bytes); storage is
+# charged once per GB stored (e.g. monthly price x retention months).
+http_request_usd = 0.0
+http_gb_usd = 0.0
+browser_render_usd = 0.0
+browser_second_usd = 0.0
+browser_gb_usd = 0.0
+search_query_usd = []   # per provider, e.g. ["exa=0.005"]
+storage_gb_usd = 0.0
+database_second_usd = 0.0
+worker_second_usd = 0.0
+
+[api]
+host = "127.0.0.1"
+port = 8002
+# /v1 requests per client address per minute.
+rate_limit_per_minute = 600
+# Set GTM__API__TOKEN in the environment to require "Authorization: Bearer <token>".
+token = ""
+# Rotation: the token being retired, accepted alongside token until clients
+# switch (GTM__API__PREVIOUS_TOKEN; docs/staging.md).
+previous_token = ""
+# Swagger UI at /docs. Local development only; staging/prod refuse it.
+docs = false
+
+[market]
+# Market research (gtm_crawler.market; docs/MARKET_ENGINE_IMPLEMENTATION.md).
+# Source classes for open-web pages: tier 1 government / statistics, tier 3
+# commercial market-research publishers. Describes the publisher, never the claim.
+# government_suffixes = [".gov", ".gov.uk", ".gov.in", ".gc.ca", ".europa.eu", ".int"]
+# statistics_domains = ["oecd.org", "worldbank.org", "imf.org", "census.gov", "bls.gov"]
+# market_research_domains = ["grandviewresearch.com", "marketsandmarkets.com", "statista.com"]
+# Runs waiting for a worker before POST /v1/market/research answers 429.
+max_queued_runs = 100
+# OCR of page images: pip install -e ".[ocr]" plus the Tesseract binary.
+ocr_enabled = false
+tesseract_cmd = ""
+# Text PDFs: pip install -e ".[pdf]" (without it PDFs are skipped with that reason).
+# Read in a child process: refused over pdf_max_bytes, read up to pdf_max_pages and
+# pdf_max_chars, killed after pdf_timeout s; pdf_memory_mb caps memory on POSIX only.
+pdf_enabled = true
+pdf_max_bytes = 20000000
+pdf_max_pages = 300
+pdf_max_chars = 3000000
+pdf_timeout = 60.0
+pdf_memory_mb = 1024
+# Optional model for the narrative and /ask answers (OpenAI-compatible
+# /chat/completions; https or localhost). Off while llm_model is empty.
+# Key: GTM__MARKET__LLM_API_KEY. It never supplies figures, sizes or scores.
+llm_base_url = ""
+llm_model = ""
+
+
+[llm]
+base_url = "https://api.groq.com/openai/v1"
+model = "openai/gpt-oss-20b"
+api_key = ""
+
+reasoning_effort = "low"
+profile_reasoning_effort = "low"
+
+max_pages = 2
+concurrency = 1
+max_tokens = 900
+profile_max_tokens = 4000

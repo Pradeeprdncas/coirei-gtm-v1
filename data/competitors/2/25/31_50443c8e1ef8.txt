@@ -1,0 +1,184 @@
+Regie.ai: AI Sales Prospecting Platform
+The fastest path from ICP to pipeline .
+Regie.ai: AI Sales Prospecting Platform
+Skip to content
+From our founders:
+Why we built RegieGO
+Why we built RegieGO, and where we're going next.
+Read the post
+Log in
+Book a demo
+Start free
+AI prospecting platform for sales reps and teams
+The fastest path
+from ICP to
+pipeline
+.
+RegieGO uses your website to find matching buyers, enrich contacts, and research reasons to connect, with emails and call scripts ready for you to review and use.
+Start free
+Book a demo
+New chat
+Tasks
+85
+More
+Lists
+People
+Accounts
+Agents
+Chats
+Account chats
+Credit usage
+0.2
+/
+5.00k
+JS
+Jane Smith
+Personal
+Hello Jane, how can I help?
+Wednesday, October 14
+Getting started with Regie
+Set up my knowledge base
+Build my first prospect list
+More
+What can I help you with?
+Regie Go Max
+Tip:
+Attach a skill to one message when you only need it once
+Find sales leaders at fast-growing SaaS companies and draft an intro email to each.
+Reply to Regie…
+My Day
+Schedule: Oct 14
+8:30
+PM
+WED
+Pipeline review
+Jane Smith, Marcus Lee
+Continue
+Agent tasks
+Daily Calls New Tasks
+77 tasks due
+Open tasks
+Recent chats
+RegieGO knowledge base setup
+3 hours ago
+Resume
+Pause the product demo
+You have a pipeline target.
+Let’s get you selling faster.
+RegieGO finds contact details and prepares emails and call scripts using your pitch and voice. Adjust your targeting and messages in chat, then email or call directly.
+01 · Find your buyers
+Find buyers who match your ICP.
+RegieGO reads your website and suggests companies and roles to target. Refine your ICP in chat, find matching accounts, and get buyers’ emails and phone numbers through waterfall enrichment.
+Already have target accounts or a prospect list? Bring it into RegieGO to find the right people and enrich their contact details.
+Find your buyers
+Your website
+Acme.com
+Target roles
+VP Sales, Director...
+Company
+Best match role
+Employees
+Match
+S
+Stripe
+VP of Sales
+VP of Sales
+1,100
+F
+Figma
+Director of Sales
+Director of Sales
+1,200
+N
+Notion
+Head of Sales
+Head of Sales
+800
+02 · Personalize your approach
+Have a reason to connect. Know what to say.
+RegieGO researches each account and buyer to find relevant reasons to reach out. It turns that research into emails and call scripts using your pitch and voice.
+Approve the messages or make them your own. Just tell RegieGO what you’d like to change in chat.
+Research this account and draft an email using our pitch and voice.
+Research
+Email
+Call script
+Subject: An idea for your sales team
+Hi Sarah,
+I work with sales leaders at payments companies and wanted to share a quick idea on how we help similar teams increase pipeline generation.
+Best,
+Jane
+03 · Email and call
+Your prospects are ready. Start the conversation.
+Send emails and reach more buyers with the built-in parallel dialer. Keep buyer research, contact details, call scripts, and previous activity in front of you as you work through your list.
+Start free
+Book a demo
+Parallel dialer
+Live
+Connected
+Sarah Chen
+Stripe
+·
+VP of Sales
+Voicemail
+Marcus Lee
+Figma
+·
+Director of Sales
+Completed
+Priya Desai
+Notion
+·
+Head of Sales
+No answer
+Daniel Kim
+Discord
+·
+VP of GTM
+Call script
+Notes
+Activity
+Hi Sarah, it’s Jane from Acme.
+I work with sales leaders at payments companies and wanted to share a quick idea on how we help teams like yours increase pipeline.
+Start next call
+From your first customers
+to your next thousand.
+Whether you sell alone or lead a sales organization, RegieGO keeps the focus on buyers.
+For founders and first sales hires
+Find buyers, test your pitch,
+start conversations.
+You need customers before you have a full sales team. Find relevant buyers, prepare your approach, and email or call from one platform.
+Start free
+For growing sales teams
+Help every rep spend
+more time selling.
+Your SDRs need meetings. Your AEs need pipeline alongside their open deals. Give them contacts, research, and prepared emails and calls, with room to adapt their approach.
+Start free
+or book a demo
+For enterprise sales teams
+Work your target accounts
+across the buying group.
+Your team has accounts to win and several people to reach within each one. Help reps identify relevant buyers, research their priorities, and tailor emails and calls by role.
+Book a demo
+Before you start.
+How does RegieGO know my ICP?
+RegieGO reads your website and suggests the companies and roles to target. Refine your ICP in chat, and it finds matching accounts and the right buyers inside them.
+Does RegieGO work with my existing tools?
+Yes. You send from your own connected Gmail or Outlook. RegieGO comes with its own built-in CRM, so you can start with nothing, or connect HubSpot or Salesforce and your records sync in. Switch on write-back and RegieGO’s work flows back too.
+What do I get in 10 minutes?
+Give RegieGO your website and it suggests who to target, finds matching buyers, enriches their contact details, and prepares emails and call scripts in your pitch and voice, ready for you to review and use.
+Can I work with accounts I already have?
+Yes. Bring your target accounts or a prospect list into RegieGO, and it finds the right people at each account and enriches their contact details.
+Does RegieGO find contact details?
+Yes. RegieGO finds buyers’ emails and phone numbers through waterfall enrichment, checking up to seven data providers in turn for every contact. The email is verified before anything sends, you only pay when a provider finds something, and every record shows where the data came from.
+Can I make calls from RegieGO?
+Yes. Calling is built in, with single-line, power, and parallel dialing up to five lines at once, and RegieGO provisions local numbers for you. Research, contact details, call scripts, and previous activity stay in front of you as you dial. Calling is part of the Pro and Team plans.
+Can I change the emails and call scripts?
+Yes. Approve them as they are, edit them yourself, or tell RegieGO in chat what you’d like to change. Nothing sends or dials unless you tell it to.
+Why use RegieGO instead of a database and a writing assistant?
+A database gives you contacts and a writing assistant gives you drafts, but you’re the one stitching them together and keeping it running. RegieGO handles the whole motion in one place: it builds your list, enriches and verifies contacts, researches reasons to reach out, drafts in your voice, and dials.
+Is RegieGO for individual sellers or teams?
+Both. Pro is for one person. Team is priced per seat with a shared credit pool, and the workspace owner adds seats as you grow. Free holds up to 10 people.
+Your next prospect list is just 10 minutes away.
+Start with your website. Find relevant buyers. Get ready to email and call.
+Start free
+Ask about pricing, credits, or how RegieGO works

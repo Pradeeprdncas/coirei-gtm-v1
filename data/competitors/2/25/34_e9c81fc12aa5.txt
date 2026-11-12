@@ -1,0 +1,171 @@
+AI Account Research and Why-Now Sales Signals · Regie.ai
+Every email starts with a dated, cited reason to reach out.
+AI Account Research and Why-Now Sales Signals · Regie.ai
+Skip to content
+From our founders:
+Why we built RegieGO
+Why we built RegieGO, and where we're going next.
+Read the post
+Log in
+Book a demo
+Start free
+Research & messaging
+Every email starts with a dated, cited reason to reach out.
+RegieGO researches each account for funding, hiring, leadership changes and more, shows you where it found them, and turns them into emails and call openers in a voice it learned from your own sent mail.
+Start free
+Book a demo
+New chat
+Tasks
+85
+More
+Lists
+People
+Accounts
+Agents
+Chats
+Account chats
+Credit usage
+0.2
+/
+5.00k
+JS
+Jane Smith
+Personal
+Accounts
+B
+Brightline Freight
+brightlinefreight.com
+·
+Freight brokerage, about 600 employees
+Overview
+People
+Activity
+Why now
+Funding
+Oct 21
+Press release
+Raised a Series B to expand its carrier network
+Hiring
+Oct 28
+Careers page
+Hiring four operations managers in Dallas
+Leadership
+Nov 1
+News
+Named a new Chief Operating Officer
+Email draft
+Why now: Funding, Oct 21
+To
+Dana Whitfield, VP of Operations
+Your carrier network expansion
+Hi Dana,
+Congrats on the Series B. Growing a carrier network that fast usually means dispatch gets stretched before headcount catches up.
+Worth a quick look at how we keep that from happening?
+Jane
+Approve
+Edit in chat
+Have a reason to connect.
+Know what to say.
+The research a good rep does on a great day, done for every account on the list.
+01 · Why-now signals
+Reasons to reach out, with receipts.
+RegieGO looks for funding rounds, hiring pushes, new executives and reorganizations at each account. Every signal comes with its date and the source it came from, so you can check it before you lean on it.
+Old news ages out: a signal expires after 60 days, or 90 for a funding round.
+B
+Brightline Freight
+brightlinefreight.com
+Why now
+Funding
+Oct 21
+Press release
+Expires Jan 19
+Raised a Series B to expand its carrier network
+Hiring
+Oct 28
+Careers page
+Expires Dec 27
+Hiring four operations managers in Dallas
+Leadership
+Nov 1
+News
+Expires Dec 31
+Named a new Chief Operating Officer
+Org change
+Jul 14
+News
+Expired
+Reorganized sales into regional teams
+02 · Drafts in your voice
+It writes like you, not like a template.
+At setup RegieGO reads your recent sent emails to learn how you write. Add your own documents and reusable writing instructions, and every draft draws on your pitch, your proof and your tone.
+Approve a draft as it is, edit it yourself, or tell RegieGO in chat what to change.
+Your voice
+Your sent emails
+Read at setup
+Q4 pitch.pdf
+Your document
+Customer proof.pdf
+Your document
+Keep it under 90 words. No exclamation marks.
+Writing instruction
+How you write
+Short sentences
+Opens with a congrats
+Signs off with first name
+03 · Sent like a person
+From your own inbox, at a human pace.
+Emails go from your own Gmail or Outlook, never a vendor domain. By default they're paced a few minutes apart, capped at 20 a day, and sent during business hours in each prospect's time zone.
+Every send re-checks your do-not-contact and opt-out lists first. LinkedIn messages are drafted for you to send from your own account.
+Sending today
+From your Gmail
+About 5 min apart
+20 a day
+8am to 5pm, their time
+9:02
+S
+Sarah Chen
+VP of Sales · Stripe
+Sent
+9:07
+F
+Marcus Lee
+Director of Sales · Figma
+Sent
+9:12
+D
+Daniel Kim
+VP of GTM · Discord
+Skipped: do not contact
+9:12
+N
+Priya Desai
+Head of Sales · Notion
+Scheduled
+9:17
+L
+Rafael Torres
+Head of Sales · Linear
+Scheduled
+On every plan, Free included. Research and drafting use credits as you go.
+Then start the conversation.
+Parallel Dialer
+Call with the research on screen
+Strategic Prospecting
+Break into the accounts that matter
+Prospecting
+Find the buyers to research
+Questions about research and messaging.
+Where do the signals come from?
+RegieGO researches each account on the web and keeps what it can date and cite: funding, hiring, leadership moves and org changes. Each one links to its source.
+Will it send anything without me?
+Not unless you tell it to. You approve drafts, edit them, or ask for changes in chat, and an agent you set up can be told to wait for your approval on every send.
+Will AI-written email hurt my domain?
+Emails send from your own mailbox at a human pace: a few minutes apart, 20 a day by default, inside business hours, with do-not-contact and opt-out checks on every send.
+Can it use our messaging and proof points?
+Yes. Upload your own documents and save reusable writing instructions, and RegieGO draws on them every time it writes.
+Does it automate LinkedIn?
+No. RegieGO writes the message and opens the profile, and you send it from your own account.
+Stop starting every email from a blank page.
+250 free credits. RegieGO learns your voice during setup.
+Start free
+Book a demo

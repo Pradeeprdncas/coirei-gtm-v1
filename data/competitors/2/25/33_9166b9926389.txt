@@ -1,0 +1,177 @@
+Free CRM for Startups and Small Sales Teams · Regie.ai
+Your CRM is free. And it's already where you prospect.
+Free CRM for Startups and Small Sales Teams · Regie.ai
+Skip to content
+From our founders:
+Why we built RegieGO
+Why we built RegieGO, and where we're going next.
+Read the post
+Log in
+Book a demo
+Start free
+Built-in CRM, free on every plan
+Your CRM is free. And it's already where you prospect.
+Every RegieGO plan, Free included, comes with a built-in CRM for your people, accounts, tasks, lists and notes, right next to the research, emails and calls that work them.
+Start free
+Book a demo
+New chat
+Tasks
+85
+More
+Lists
+People
+Accounts
+Agents
+Chats
+Account chats
+Credit usage
+0.2
+/
+5.00k
+JS
+Jane Smith
+Personal
+Accounts
+Accounts
+186 accounts
+Import CSV
+New account
+Account
+Industry
+People
+Last activity
+Next task
+W
+Webflow
+Software
+6
+Call, today
+Call Olivia
+S
+Stripe
+Fintech
+9
+Email, Tue
+Send intro
+L
+Linear
+Software
+3
+Note, Mon
+Follow up
+N
+Notion
+Software
+4
+Email, Oct 30
+Research
+S
+Slack
+Software
+5
+Call, Oct 29
+Book meeting
+F
+Figma
+Design
+7
+Email, Oct 27
+Send recap
+W
+Webflow
+900
+employees
+Synced with HubSpot
+People
+Tasks
+Notes
+OC
+Olivia Carter
+Director of Sales
+Next task
+Call Olivia about the Q1 rollout
+Today
+Note
+Prefers mornings. Asked for pricing by seat.
+No CRM to buy.
+No CRM to set up first.
+Start prospecting on day one. The records are already somewhere sensible.
+01 · Start with nothing
+Import a list, or build one as you go.
+Upload a CSV and map its columns, or let your accounts and contacts build up as RegieGO finds them. Add custom fields for whatever your team tracks.
+There's no separate CRM to license and no admin project before you can start.
+Import CSV
+q4-target-accounts.csv
+Column in your file
+Field in RegieGO
+Company
+Account name
+Work email
+Email
+Title
+Job title
+Region
+Region
+New custom field
+Import 248 rows
+02 · Everything in one place
+The whole account on one screen.
+People, tasks and notes sit on the account they belong to, beside the research RegieGO did on it. Your team shares the same people and accounts, so everyone works from the same records.
+It's built for prospecting. When a deal is real, it belongs in the CRM your team runs deals in, which is what the sync is for.
+W
+Webflow
+900
+employees
+Activity
+People
+Tasks
+Notes
+Call with Olivia Carter
+Interested. Wants a Q1 rollout plan.
+Today
+Task: send the rollout plan
+Due Thursday
+Today
+Email: Q1 rollout plan
+Sent from your inbox
+Tue
+Note
+Prefers mornings. Asked for pricing by seat.
+Mon
+03 · Already on a CRM?
+Bring your CRM, or use ours.
+Connect HubSpot or Salesforce on any plan and your records sync in, with a backfill of what's already there. Switch on write-back and RegieGO's work flows back too, so the same work isn't logged twice.
+Each workspace connects one CRM, and it runs alongside your existing tools instead of replacing them.
+H
+HubSpot
+Connected
+Bring in contacts and companies
+Synced 2 min ago
+Backfill existing records
+1,248 contacts, 186 companies
+Write back calls, emails and notes
+Logged as HubSpot activities
+One CRM per workspace
+On every plan, Free included. The CRM never costs a credit.
+Then fill it with buyers.
+Prospecting
+Find buyers who fit your ICP
+Waterfall Enrichment
+Emails and phones, pay only when we find them
+Integrations
+Everything RegieGO connects to
+Questions about the CRM.
+Is the CRM really free?
+Yes. It's included on every plan, Free too, and it never costs a credit. Credits pay for research, drafting, enrichment and calling.
+Do I have to switch off HubSpot or Salesforce?
+No. Connect it on any plan and your records sync in, with a backfill of what's already there. Switch on write-back and RegieGO's work flows back too. Each workspace connects one CRM.
+Does it track deals and pipeline stages?
+No. It's built for prospecting: people, accounts, tasks, lists and notes. Deals belong in the CRM your team runs them in, and RegieGO syncs with HubSpot and Salesforce for exactly that.
+Can I bring in the contacts I already have?
+Yes. Upload a CSV and map its columns, including to custom fields you create, or connect HubSpot or Salesforce.
+Does my team see the same records?
+Yes. People and accounts are shared across your workspace. Each person's tasks and chats stay their own.
+Start with a CRM that's already free.
+250 free credits. No credit card needed.
+Start free
+Book a demo
