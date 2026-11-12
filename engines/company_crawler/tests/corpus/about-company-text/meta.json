@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/about",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "About page prose: founding year, headquarters, based-in, employee count with qualifier, size band, ownership, business model, market, offices, open roles. \"LinkedIn lists Acme in the 51-200 employees band\" is LinkedIn's figure quoted by the company: status reported, reported_by LinkedIn.",
+  "company_names": [
+    "Acme"
+  ]
+}

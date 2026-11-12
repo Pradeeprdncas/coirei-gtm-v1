@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/de/uber-uns",
+  "content_type": "text/html",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "No HTTP charset; the <meta charset=windows-1252> decides decoding (umlauts, euro sign, en dash); lang from <html lang>.",
+  "company_names": [
+    "Acme"
+  ]
+}

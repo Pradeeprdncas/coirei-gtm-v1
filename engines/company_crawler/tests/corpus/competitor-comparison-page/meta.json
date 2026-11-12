@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/vs/globex",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Comparison page whose <h1> names the competitor in the URL (basis comparison_page).",
+  "company_names": [
+    "Acme"
+  ]
+}

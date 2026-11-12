@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/partners",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Lists under 'Technology partners' / 'Channel partners' headings, a partner badge, 'Trusted by' customers and a generic 'Trusted by' tail that names no one.",
+  "company_names": [
+    "Acme"
+  ]
+}

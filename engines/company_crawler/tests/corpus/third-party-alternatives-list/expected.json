@@ -1,0 +1,98 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [
+    {
+      "as_of": null,
+      "certainty": 0.5,
+      "extractor": "competitor",
+      "field": "competitor",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 10,
+        "char_start": 3,
+        "locator": "/html/body/main/h2[2]",
+        "locator_type": "xpath",
+        "text": "Initech"
+      },
+      "related": {
+        "basis": "third_party_alternatives_list",
+        "name": "Initech",
+        "type": "competitor"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Initech"
+    },
+    {
+      "as_of": null,
+      "certainty": 0.5,
+      "extractor": "competitor",
+      "field": "competitor",
+      "kind": "stated",
+      "product": null,
+      "qualifier": null,
+      "quote": {
+        "char_end": 9,
+        "char_start": 3,
+        "locator": "/html/body/main/h2[1]",
+        "locator_type": "xpath",
+        "text": "Globex"
+      },
+      "related": {
+        "basis": "third_party_alternatives_list",
+        "name": "Globex",
+        "type": "competitor"
+      },
+      "value_normalized": null,
+      "value_verbatim": "Globex"
+    }
+  ],
+  "page": {
+    "blocks": 8,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Acme alternatives"
+      ],
+      [
+        2,
+        "1. Globex Review"
+      ],
+      [
+        2,
+        "2. Initech"
+      ],
+      [
+        2,
+        "FAQ"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "62a8625ebb4530f85d88e4098a5cc8e12fa6f9a18f3e8338c6d08d7fff0b71ce",
+    "title": "Top Acme alternatives in 2026 - Reviews Example",
+    "url": "https://reviews.example/acme-alternatives"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

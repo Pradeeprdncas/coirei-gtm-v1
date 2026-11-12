@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/press/acme-raises-series-a",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Spec section 16: \"raised $20M\" is a funding round (with its round and investors), never a valuation; the dated press release's h1 is a recent update.",
+  "company_names": [
+    "Acme"
+  ]
+}

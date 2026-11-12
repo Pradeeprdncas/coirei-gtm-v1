@@ -9,6 +9,8 @@ from app.services.llm import llm_health
 from app.routers import projects
 
 from app.routers import competitors
+from app.routers import intelligence_sync
+from app.routers import intelligence
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,8 +59,9 @@ app.include_router(companies.router)
 app.include_router(onboarding.router)
 app.include_router(products.router)
 
-
+app.include_router(intelligence.router)
 app.include_router(projects.router)
 
 app.include_router(competitors.router)
 
+app.include_router(intelligence_sync.router)

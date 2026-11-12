@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/investors/annual-report",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Spec section 16: \"up to 40%\" is never \"40%\": customer concentration is recorded as the stated phrase.",
+  "company_names": [
+    "Acme"
+  ]
+}

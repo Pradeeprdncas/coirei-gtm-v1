@@ -1,0 +1,10 @@
+{
+  "url": "https://acme.example/company/about?utm_source=newsletter",
+  "content_type": "text/html; charset=utf-8",
+  "subject_domain": "acme.example",
+  "first_party": true,
+  "description": "Relative canonical and links resolve against <base href>; tracking parameters are stripped; language from content-language meta.",
+  "company_names": [
+    "Acme"
+  ]
+}

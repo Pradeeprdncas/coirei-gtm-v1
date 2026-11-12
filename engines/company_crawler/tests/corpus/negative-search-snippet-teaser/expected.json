@@ -1,0 +1,39 @@
+{
+  "company_names": [
+    "Acme"
+  ],
+  "observations": [],
+  "page": {
+    "blocks": 3,
+    "canonical_url": null,
+    "description": null,
+    "encoding": "utf-8",
+    "headings": [
+      [
+        1,
+        "Acme"
+      ]
+    ],
+    "json_ld_errors": 0,
+    "json_ld_nodes": 0,
+    "language": "en",
+    "links": [],
+    "parse_error": null,
+    "published_at": null,
+    "text_sha256": "568ee976c07b2c6e963406d36ef33e1f0573ab9ecf782edd341acceaf6aa8363",
+    "title": "Acme | Company profile - Directory Example",
+    "url": "https://directory.example/company/acme"
+  },
+  "products": [],
+  "versions": {
+    "extractors": {
+      "company": "9",
+      "competitor": "4",
+      "llm": "page-llm-3",
+      "product": "6",
+      "signals": "5",
+      "traction": "4"
+    },
+    "parser": "5"
+  }
+}

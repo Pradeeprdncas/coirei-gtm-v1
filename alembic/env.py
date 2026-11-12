@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.core.config import settings
 from app.core.db import Base
 from app.models import entities  # noqa: F401 registers tables
-
+from app.models import intelligence  # noqa: F401
 config = context.config
 config.set_main_option('sqlalchemy.url', settings().database_url.replace('%', '%%'))
 if config.config_file_name:

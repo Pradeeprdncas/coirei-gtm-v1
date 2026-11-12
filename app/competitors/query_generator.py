@@ -7,8 +7,9 @@ from app.services.llm import json_completion
 def compact_product(snapshot: dict) -> dict:
     company = snapshot.get("company", {})
     product = snapshot.get("product", {})
+    intelligence = snapshot.get("intelligence", {})
 
-    return {
+    base = {
         "product": product.get("name"),
         "category": product.get("category"),
         "description": product.get("description"),
@@ -27,19 +28,61 @@ def compact_product(snapshot: dict) -> dict:
         "company_market": company.get("market_segment"),
     }
 
+    if intelligence:
+        if intelligence.get("industry") and not base.get("category"):
+            base["category"] = intelligence["industry"]
+        if intelligence.get("key_messages"):
+            base["key_messages"] = intelligence["key_messages"][:4]
+        if intelligence.get("selling_points"):
+            base["selling_points"] = intelligence["selling_points"][:4]
+        if intelligence.get("target_segments"):
+            base["target_segments"] = intelligence["target_segments"]
+        if intelligence.get("differentiators"):
+            base["differentiators"] = intelligence["differentiators"][:3]
+        if intelligence.get("named_customers"):
+            base["known_customers"] = intelligence["named_customers"][:5]
+
+    return base
+
+
+def _intelligence_queries(intelligence: dict, name: str) -> list[str]:
+    """Generate extra queries from intelligence data that the snapshot may lack."""
+    queries = []
+    selling_points = intelligence.get("selling_points")
+    if isinstance(selling_points, list) and selling_points:
+        queries.append(f"software that {selling_points[0][:80]}")
+    target = intelligence.get("target_segments")
+    if isinstance(target, str) and target:
+        queries.append(f"{target[:60]} software tools competitors")
+    elif isinstance(target, list) and target:
+        queries.append(f"{target[0][:60]} software tools competitors")
+    differentiators = intelligence.get("differentiators")
+    if isinstance(differentiators, list) and differentiators:
+        queries.append(f"alternatives for {differentiators[0][:80]}")
+    customers = intelligence.get("named_customers")
+    if isinstance(customers, list) and len(customers) >= 2:
+        queries.append(f"tools used by {customers[0][:40]} and {customers[1][:40]}")
+    return queries
+
 
 async def generate_queries(
     snapshot: dict,
     count: int = 5,
 ) -> list[str]:
     context = compact_product(snapshot)
+    intelligence = snapshot.get("intelligence", {})
 
     name = str(context.get("product") or "software")
-    category = str(
+
+    raw_category = str(
         context.get("category")
         or context.get("use_case")
         or "software"
-    )[:100]
+    )
+    # Truncate at word boundary so queries don't end mid-word.
+    if len(raw_category) > 60:
+        raw_category = raw_category[:60].rsplit(" ", 1)[0]
+    category = raw_category
 
     region = str(
         context.get("company_country") or ""
@@ -52,6 +95,9 @@ async def generate_queries(
         f"{category} platforms for businesses {region}",
         f"alternatives to {name} for same customers",
     ]
+
+    if intelligence:
+        fallback = _intelligence_queries(intelligence, name) + fallback
 
     ai = await json_completion(
         (

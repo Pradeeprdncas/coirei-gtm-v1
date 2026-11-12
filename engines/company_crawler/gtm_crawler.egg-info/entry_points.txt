@@ -1,0 +1,5 @@
+[console_scripts]
+gtm-api = gtm_crawler.api:main
+gtm-crawl = gtm_crawler.cli:main
+gtm-market = gtm_crawler.market.runner:main
+gtm-worker = gtm_crawler.worker:main
