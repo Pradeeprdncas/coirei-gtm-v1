@@ -20,6 +20,7 @@ from app.services.pipeline import process_job
 from app.services.rag.core import retrieve
 from app.services.gap_suggestions import (
     merge_suggestions,
+    normalize as normalize_text,
     page_types_for,
     question_template,
 )
@@ -384,11 +385,6 @@ def missing_fields(company: Company, products: list[Product]) -> list[str]:
     return gaps[:4]
 
 
-QUESTION_TEMPLATES = {
-    'company.business_model':'How does your business charge customers (subscriptions, usage, services or other)?',
-    'company.icp':'Who is your primary ideal customer, and what problem do you solve for them?',
-    'company.products':'What are the names of your sellable products or services?'
-}
 async def _gap_passages(
     db: AsyncSession,
     company_id: int,
@@ -500,6 +496,75 @@ async def _gap_passages(
         })
 
     return passages
+
+
+# Our field_key kind -> the GTM crawler's gap-question field key. Both sides
+# use the same Business Intelligence Profile vocabulary for these (see
+# app/services/intelligence/mapping.py), so no translation is needed beyond
+# the "company."/"gap:" prefixing each side uses.
+_GTM_GAP_FIELD = {"business_model": "business_model", "icp": "icp"}
+
+
+async def _gtm_suggestion(
+    db: AsyncSession,
+    company_id: int,
+    field_key: str,
+) -> dict | None:
+    """The GTM crawler's own suggested value for this field, if a deep-crawl job
+    was linked for this company and it has a graded answer. Its questions are
+    assessed against evidence confidence thresholds (fa-v2), so this is
+    typically better-grounded than our own lighter scrape. Never raises: a
+    crawler hiccup just means no extra suggestion, not a failed gap-questions call."""
+    kind = field_key.rsplit(".", 1)[-1]
+
+    if field_key == "company.products":
+        gtm_id = "catalogue"
+    elif kind in _GTM_GAP_FIELD:
+        gtm_id = f"gap:{_GTM_GAP_FIELD[kind]}"
+    else:
+        return None
+
+    link = await db.get(IntelligenceLink, company_id)
+
+    if link is None:
+        return None
+
+    try:
+        data = await crawler_request(
+            "GET", f"/v1/companies/{link.crawler_company_id}/questions"
+        )
+    except HTTPException:
+        return None
+
+    question = next(
+        (q for q in data.get("questions", []) if q.get("id") == gtm_id), None
+    )
+
+    if not question:
+        return None
+
+    suggested = question.get("suggested")
+
+    if isinstance(suggested, list):
+        text = ", ".join(str(v) for v in suggested if v)
+    elif isinstance(suggested, str):
+        text = suggested
+    else:
+        text = ""
+
+    text = text.strip()
+
+    if not text:
+        return None
+
+    return {
+        "text": text[:300],
+        "quote": None,
+        "source_id": None,
+        "source_url": None,
+        "source": "gtm_crawler",
+        "verified_by": "gtm_crawler",
+    }
 
 
 @router.post("/{company_id}/gap-questions")
@@ -652,6 +717,14 @@ async def generate_gap(
             passages,
             ai,
         )
+
+        gtm_suggestion = await _gtm_suggestion(db, company_id, field_key)
+        if gtm_suggestion:
+            key = normalize_text(gtm_suggestion["text"]).lower()
+            suggestions = [gtm_suggestion] + [
+                s for s in suggestions if normalize_text(s["text"]).lower() != key
+            ]
+            suggestions = suggestions[:3]
 
         if old_question:
             old_question.question = question_text

@@ -196,18 +196,12 @@ def merge_suggestions(
             if BANNED.search(quote):
                 continue
 
-            # Require at least one meaningful matching term
-            # between the suggestion and its supporting quote.
-            words = lambda x: {
-                w for w in re.findall(r"[a-z]{4,}", x.lower())
-                if w not in {
-                    "that", "this", "with", "from", "your",
-                    "their", "which", "about", "there"
-                }
-            }
-
-            if not (words(answer) & words(quote)):
-                continue
+            # The real anti-hallucination guard is above: the quote must appear
+            # verbatim in the cited source. A further "shares a word with its
+            # quote" check used to live here too, but an AI answer that properly
+            # paraphrases its quote often shares none of its exact words —
+            # that silently rejected good AI suggestions and fell through to
+            # the cruder keyword-regex fallback below for no real safety gain.
 
             key = normalize(answer).lower()
 
@@ -222,6 +216,7 @@ def merge_suggestions(
                 "source_id": int(source_id),
                 "source_url": source.get("url", ""),
                 "source": "evidence",
+                "verified_by": "ai",
             })
 
             if len(suggestions) >= 3:
@@ -234,7 +229,7 @@ def merge_suggestions(
             continue
 
         seen.add(key)
-        suggestions.append(item)
+        suggestions.append({**item, "verified_by": "keyword_match"})
 
         if len(suggestions) >= 3:
             break
