@@ -96,18 +96,30 @@ class LlmError(Exception):
 
 
 class PageReader:
-    """One OpenAI-compatible ``/chat/completions`` endpoint, called from threads."""
+    """One OpenAI-compatible ``/chat/completions`` endpoint, called from threads.
+
+    ``s.model`` is the primary provider (Groq, by default); if ``s.secondary_model``
+    is set, it is tried once more whenever the primary call fails (timeout, non-2xx,
+    bad JSON) before the page is counted as failed."""
 
     def __init__(self, s: LlmSettings, transport: httpx.BaseTransport | None = None) -> None:
         self.s = s
+        self._client = self._build_client(transport, s.api_key)
+        self._secondary_client = (
+            self._build_client(transport, s.secondary_api_key) if s.secondary_model else None
+        )
+
+    def _build_client(self, transport: httpx.BaseTransport | None, api_key: str) -> httpx.Client:
         headers = {"User-Agent": f"gtm-crawler/{__version__}"}
-        if s.api_key:
-            headers["Authorization"] = f"Bearer {s.api_key}"
-        self._client = httpx.Client(transport=transport, trust_env=False, timeout=s.timeout,
-                                    headers=headers)  # fmt: skip
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        return httpx.Client(transport=transport, trust_env=False, timeout=self.s.timeout,
+                            headers=headers)  # fmt: skip
 
     def close(self) -> None:
         self._client.close()
+        if self._secondary_client is not None:
+            self._secondary_client.close()
 
     def read(self, url: str, title: str | None, text: str) -> dict[str, Any]:
         page = text[: self.s.max_chars].replace("<", "‹").replace(">", "›")
@@ -117,10 +129,30 @@ class PageReader:
     def complete(self, system: str, user: str, max_tokens: int,
                  reasoning_effort: str | None = None) -> str:  # fmt: skip
         """The model's JSON answer to ``user`` under ``system``, as text.
-        ``reasoning_effort`` overrides the setting (a thinking model reasons first)."""
-        url = self.s.base_url.rstrip("/") + "/chat/completions"
+        ``reasoning_effort`` overrides the setting (a thinking model reasons first).
+        Falls back to the secondary provider if the primary call fails."""
+        try:
+            return self._complete_on(self._client, self.s.base_url, self.s.model,
+                                     system, user, max_tokens, reasoning_effort)  # fmt: skip
+        except LlmError as primary_exc:
+            if self._secondary_client is None:
+                raise
+            log.warning("llm.primary_failed", extra={"model": self.s.model, "error": str(primary_exc)})
+            try:
+                return self._complete_on(self._secondary_client, self.s.secondary_base_url,
+                                         self.s.secondary_model, system, user, max_tokens,
+                                         reasoning_effort)  # fmt: skip
+            except LlmError as secondary_exc:
+                raise LlmError(
+                    f"primary ({self.s.model}): {primary_exc}; "
+                    f"secondary ({self.s.secondary_model}): {secondary_exc}"
+                ) from secondary_exc
+
+    def _complete_on(self, client: httpx.Client, base_url: str, model: str, system: str, user: str,
+                     max_tokens: int, reasoning_effort: str | None) -> str:  # fmt: skip
+        url = base_url.rstrip("/") + "/chat/completions"
         body: dict[str, Any] = {
-            "model": self.s.model, "temperature": 0, "max_tokens": max_tokens,
+            "model": model, "temperature": 0, "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }  # fmt: skip
@@ -133,7 +165,7 @@ class PageReader:
             body.update(temperature=0.6, top_p=0.95)
         for attempt in range(2):
             try:
-                response = self._client.post(url, json=body)
+                response = client.post(url, json=body)
             except httpx.HTTPError as exc:
                 if attempt:
                     raise LlmError(f"{type(exc).__name__}: {exc}") from exc

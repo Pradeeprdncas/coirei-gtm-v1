@@ -1,11 +1,14 @@
 
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
-REM Start Coirei in three separate terminal windows.
+REM Start Coirei in separate terminal windows: main API, competitor API +
+REM worker, and the GTM crawler API + worker.
 cd /d "%~dp0"
 
 set "PY=%CD%\.venv\Scripts\python.exe"
+set "CRAWLER_DIR=%CD%\engines\company_crawler"
+set "CRAWLER_PY=%CRAWLER_DIR%\.venv\Scripts\python.exe"
 
 if not exist "%PY%" (
     echo ERROR: Virtual environment not found.
@@ -15,8 +18,51 @@ if not exist "%PY%" (
     exit /b 1
 )
 
+if not exist "%CRAWLER_PY%" (
+    echo ERROR: GTM crawler virtual environment not found: %CRAWLER_PY%
+    echo Create it with:
+    echo cd engines\company_crawler ^&^& python -m venv .venv
+    echo .venv\Scripts\python.exe -m pip install -e .
+    exit /b 1
+)
+
 if not exist ".env" if not defined DATABASE_URL (
     echo ERROR: Create .env with DATABASE_URL and secrets.
+    exit /b 1
+)
+
+REM Load every KEY=VALUE line of .env as a batch variable (same values the
+REM Python processes read via pydantic-settings), skipping comments/blanks.
+if exist ".env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%a in (".env") do (
+        if not "%%a"=="" set "%%a=%%b"
+    )
+)
+
+REM Derive the GTM__SECTION__KEY overrides the crawler needs from the plain
+REM keys above, so nothing is duplicated between the two services. The crawler
+REM runs its own Alembic migration chain and schema, so GTM__DATABASE__URL
+REM must be set explicitly in .env to a SEPARATE database from DATABASE_URL
+REM (sharing one breaks both migration histories).
+if not defined GTM__DATABASE__URL (
+    echo ERROR: Set GTM__DATABASE__URL in .env ^(the GTM crawler's own database,
+    echo separate from DATABASE_URL^). Example:
+    echo   GTM__DATABASE__URL=postgresql+psycopg://user:@127.0.0.1:5432/coirei_intelligence
+    exit /b 1
+)
+set "GTM__API__TOKEN=%CRAWLER_SERVICE_TOKEN%"
+set "GTM__LLM__API_KEY=%GROQ_API_KEY%"
+if not defined GROQ_BASE_URL set "GROQ_BASE_URL=https://api.groq.com/openai/v1"
+if not defined GROQ_MODEL set "GROQ_MODEL=openai/gpt-oss-20b"
+set "GTM__LLM__BASE_URL=%GROQ_BASE_URL%"
+set "GTM__LLM__MODEL=%GROQ_MODEL%"
+set "GTM__LLM__SECONDARY_BASE_URL=%OLLAMA_BASE_URL:/api=/v1%"
+set "GTM__LLM__SECONDARY_MODEL=%OLLAMA_MODEL%"
+set "GTM__LLM__SECONDARY_API_KEY=%OLLAMA_API_KEY%"
+set "GTM__SEARCH__API_KEY=%TAVILY_API_KEY%"
+
+if not defined GTM__API__TOKEN (
+    echo ERROR: Set CRAWLER_SERVICE_TOKEN in .env ^(shared with GTM__API__TOKEN^).
     exit /b 1
 )
 
@@ -26,7 +72,7 @@ echo Checking backend configuration...
 
 if errorlevel 1 exit /b 1
 
-echo Checking PostgreSQL and applying migrations...
+echo Checking PostgreSQL and applying migrations (main)...
 
 "%PY%" -m alembic upgrade head
 
@@ -36,6 +82,19 @@ if errorlevel 1 (
     echo Use 127.0.0.1 instead of localhost in DATABASE_URL.
     echo Check Windows Services to ensure PostgreSQL is running.
     echo Example: net start postgresql-x64-18
+    exit /b 1
+)
+
+echo Applying migrations (GTM crawler)...
+
+pushd "%CRAWLER_DIR%"
+"%CRAWLER_PY%" -m alembic upgrade head
+set "CRAWLER_MIGRATE_RC=%errorlevel%"
+popd
+
+if not "%CRAWLER_MIGRATE_RC%"=="0" (
+    echo.
+    echo ERROR: GTM crawler migration failed.
     exit /b 1
 )
 
@@ -57,6 +116,15 @@ if not errorlevel 1 (
     exit /b 1
 )
 
+REM Check port 8002.
+"%PY%" -c "import socket; s=socket.create_connection(('127.0.0.1',8002),timeout=1); s.close()" >nul 2>&1
+
+if not errorlevel 1 (
+    echo ERROR: Port 8002 is already in use.
+    netstat -ano | findstr :8002
+    exit /b 1
+)
+
 echo.
 echo Starting main API on port 8000...
 
@@ -70,6 +138,14 @@ echo Starting competitor worker...
 
 start "Coirei Discovery Worker" /D "%CD%" cmd /k ".venv\Scripts\python.exe -m app.competitors.worker"
 
+echo Starting GTM crawler API on port 8002...
+
+start "Coirei GTM Crawler API 8002" /D "%CRAWLER_DIR%" cmd /k "set GTM__DATABASE__URL=%GTM__DATABASE__URL%&& set GTM__API__TOKEN=%GTM__API__TOKEN%&& set GTM__LLM__API_KEY=%GTM__LLM__API_KEY%&& set GTM__LLM__BASE_URL=%GTM__LLM__BASE_URL%&& set GTM__LLM__MODEL=%GTM__LLM__MODEL%&& set GTM__LLM__SECONDARY_BASE_URL=%GTM__LLM__SECONDARY_BASE_URL%&& set GTM__LLM__SECONDARY_MODEL=%GTM__LLM__SECONDARY_MODEL%&& set GTM__LLM__SECONDARY_API_KEY=%GTM__LLM__SECONDARY_API_KEY%&& set GTM__SEARCH__API_KEY=%GTM__SEARCH__API_KEY%&& .venv\Scripts\python.exe -m gtm_crawler.api"
+
+echo Starting GTM crawler worker...
+
+start "Coirei GTM Crawler Worker" /D "%CRAWLER_DIR%" cmd /k "set GTM__DATABASE__URL=%GTM__DATABASE__URL%&& set GTM__API__TOKEN=%GTM__API__TOKEN%&& set GTM__LLM__API_KEY=%GTM__LLM__API_KEY%&& set GTM__LLM__BASE_URL=%GTM__LLM__BASE_URL%&& set GTM__LLM__MODEL=%GTM__LLM__MODEL%&& set GTM__LLM__SECONDARY_BASE_URL=%GTM__LLM__SECONDARY_BASE_URL%&& set GTM__LLM__SECONDARY_MODEL=%GTM__LLM__SECONDARY_MODEL%&& set GTM__LLM__SECONDARY_API_KEY=%GTM__LLM__SECONDARY_API_KEY%&& set GTM__SEARCH__API_KEY=%GTM__SEARCH__API_KEY%&& .venv\Scripts\python.exe -m gtm_crawler.worker"
+
 echo.
 echo ==========================================
 echo          COIREI BACKEND STARTED
@@ -81,9 +157,15 @@ echo.
 echo Competitor Swagger:
 echo http://127.0.0.1:8001/docs
 echo.
-echo Discovery worker started.
+echo GTM Crawler Swagger:
+echo http://127.0.0.1:8002/docs ^(if GTM__API__DOCS=true^)
 echo.
-echo Three terminal windows have been opened.
+echo Discovery worker started.
+echo GTM crawler worker started.
+echo.
+echo LLM: primary=groq (%GTM__LLM__MODEL%), secondary=ollama (%GTM__LLM__SECONDARY_MODEL%)
+echo.
+echo Five terminal windows have been opened.
 echo Close each window or press Ctrl+C in each to stop.
 echo ==========================================
 

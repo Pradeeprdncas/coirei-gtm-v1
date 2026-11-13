@@ -239,9 +239,18 @@ llm_model = ""
 
 
 [llm]
+# Primary provider (Groq). api_key is set via GTM__LLM__API_KEY in the environment
+# (the root .env/start scripts forward GROQ_API_KEY there automatically).
 base_url = "https://api.groq.com/openai/v1"
 model = "openai/gpt-oss-20b"
 api_key = ""
+
+# Secondary (fallback) provider, tried only if the primary call fails. Off while
+# secondary_model is empty. secondary_api_key is set via GTM__LLM__SECONDARY_API_KEY
+# (the root .env/start scripts forward OLLAMA_API_KEY there automatically).
+secondary_base_url = ""
+secondary_model = ""
+secondary_api_key = ""
 
 reasoning_effort = "low"
 profile_reasoning_effort = "low"

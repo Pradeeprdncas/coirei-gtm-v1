@@ -236,3 +236,24 @@ pdf_memory_mb = 1024
 # Key: GTM__MARKET__LLM_API_KEY. It never supplies figures, sizes or scores.
 llm_base_url = ""
 llm_model = ""
+
+[llm]
+# Page labels and company facts (extract/llm.py), and the company profile
+# (profile.py). Primary provider; api_key via GTM__LLM__API_KEY.
+base_url = "https://api.groq.com/openai/v1"
+model = "openai/gpt-oss-20b"
+api_key = ""
+
+# Secondary (fallback) provider, tried only if the primary call fails. Off
+# while secondary_model is empty. Key: GTM__LLM__SECONDARY_API_KEY.
+secondary_base_url = ""
+secondary_model = ""
+secondary_api_key = ""
+
+reasoning_effort = "low"
+profile_reasoning_effort = "low"
+
+max_pages = 2
+concurrency = 1
+max_tokens = 900
+profile_max_tokens = 4000

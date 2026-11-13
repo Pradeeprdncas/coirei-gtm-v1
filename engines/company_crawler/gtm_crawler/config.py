@@ -721,6 +721,11 @@ class LlmSettings:
     base_url: str = ""
     model: str = ""
     api_key: Secret = Secret("")
+    # Secondary (fallback) provider, tried only if the primary call fails (timeout,
+    # non-2xx, bad JSON). Off while secondary_model is empty.
+    secondary_base_url: str = ""
+    secondary_model: str = ""
+    secondary_api_key: Secret = Secret("")
     timeout: float = 120.0
     # Own pages labelled per extraction (home page first); the rest keep rules only.
     max_pages: int = 200
@@ -753,6 +758,13 @@ class LlmSettings:
                 or (url.scheme == "http" and url.hostname in ("localhost", "127.0.0.1", "::1"))
             ):
                 raise ConfigError("llm.base_url: https, or http on localhost only")
+        if self.secondary_model:
+            url = urlsplit(self.secondary_base_url)
+            if not url.hostname or not (
+                url.scheme == "https"
+                or (url.scheme == "http" and url.hostname in ("localhost", "127.0.0.1", "::1"))
+            ):
+                raise ConfigError("llm.secondary_base_url: https, or http on localhost only")
 
 
 @dataclass(frozen=True)
