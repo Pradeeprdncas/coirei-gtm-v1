@@ -10,6 +10,7 @@ IMPORTANT: Return {} only when LLM_OPTIONAL is enabled; the active extraction jo
 will record the connection / model error in its warnings so users can see it.
 """
 from contextvars import ContextVar
+import asyncio
 import json
 import logging
 import httpx
@@ -17,6 +18,13 @@ from app.core.config import settings
 
 log = logging.getLogger(__name__)
 _issues: ContextVar[list[str] | None] = ContextVar('coirei_llm_issues', default=None)
+
+# A discovery job can fire 10-20+ calls back to back (extract + score per
+# candidate); Groq's free tier rate-limits well within that. Retry 429s with
+# backoff before giving up on the primary provider, instead of treating a
+# transient rate limit the same as a real outage and falling to secondary.
+_MAX_RATE_LIMIT_RETRIES = 3
+_MAX_RETRY_DELAY = 20.0
 
 
 def start_llm_audit():
@@ -49,6 +57,31 @@ def _parse_object(content: str) -> dict:
     return obj
 
 
+def _retry_delay(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get('retry-after')
+    if retry_after:
+        try:
+            return min(float(retry_after), _MAX_RETRY_DELAY)
+        except ValueError:
+            pass
+    return min(2.0 * (2 ** attempt), _MAX_RETRY_DELAY)
+
+
+async def _post_with_rate_limit_retry(client: httpx.AsyncClient, url: str, body: dict,
+                                      headers: dict, provider: str) -> httpx.Response:  # fmt: skip
+    """POST, retrying on 429 (honoring Retry-After) before giving up on this provider."""
+    for attempt in range(_MAX_RATE_LIMIT_RETRIES + 1):
+        response = await client.post(url, json=body, headers=headers)
+        if response.status_code == 429 and attempt < _MAX_RATE_LIMIT_RETRIES:
+            delay = _retry_delay(response, attempt)
+            log.warning('%s rate limited (429); retrying in %.1fs (attempt %d/%d)',
+                       provider, delay, attempt + 1, _MAX_RATE_LIMIT_RETRIES)  # fmt: skip
+            await asyncio.sleep(delay)
+            continue
+        return response
+    return response
+
+
 async def _groq_completion(system: str, prompt: str, schema: dict | None, cfg) -> dict:
     """Primary provider: Groq's OpenAI-compatible chat endpoint."""
     if not cfg.groq_api_key:
@@ -63,8 +96,8 @@ async def _groq_completion(system: str, prompt: str, schema: dict | None, cfg) -
         body['messages'][0]['content'] += '\nReturn JSON matching schema: ' + json.dumps(schema)[:5000]
     url = cfg.groq_base_url.rstrip('/') + '/chat/completions'
     async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
-        response = await client.post(url, json=body,
-                                     headers={'Authorization': f'Bearer {cfg.groq_api_key}'})
+        response = await _post_with_rate_limit_retry(
+            client, url, body, {'Authorization': f'Bearer {cfg.groq_api_key}'}, 'Groq')
         response.raise_for_status()
     content = response.json()['choices'][0]['message']['content'] or ''
     return _parse_object(content)
@@ -94,8 +127,8 @@ async def _ollama_completion(system: str, prompt: str, schema: dict | None, cfg)
     if schema:
         body['messages'][0]['content'] += '\nReturn JSON matching schema: ' + json.dumps(schema)[:5000]
     async with httpx.AsyncClient(timeout=90, trust_env=False) as client:
-        response = await client.post(_ollama_endpoint(cfg.ollama_base_url, 'chat'), json=body,
-                                     headers=headers)
+        response = await _post_with_rate_limit_retry(
+            client, _ollama_endpoint(cfg.ollama_base_url, 'chat'), body, headers, 'Ollama')
         response.raise_for_status()
     content = response.json()['message']['content'] or ''
     return _parse_object(content)
