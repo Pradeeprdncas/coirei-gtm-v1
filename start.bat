@@ -11,18 +11,43 @@ set "CRAWLER_DIR=%CD%\engines\company_crawler"
 set "CRAWLER_PY=%CRAWLER_DIR%\.venv\Scripts\python.exe"
 
 if not exist "%PY%" (
-    echo ERROR: Virtual environment not found.
-    echo Create it with: py -3.11 -m venv .venv
-    echo Install requirements with:
-    echo .venv\Scripts\python.exe -m pip install -r requirements.txt
+    echo Main virtual environment not found - creating it ^(.venv^)...
+    py -3.12 -m venv .venv 2>nul
+    if errorlevel 1 python -m venv .venv
+    if not exist "%PY%" (
+        echo ERROR: Could not create a virtual environment. Is Python 3.11+ on PATH?
+        exit /b 1
+    )
+)
+
+echo Installing/verifying main API requirements...
+"%PY%" -m pip install -q --upgrade pip
+"%PY%" -m pip install -q -r requirements.txt
+if errorlevel 1 (
+    echo ERROR: Failed to install main API requirements.
     exit /b 1
 )
 
 if not exist "%CRAWLER_PY%" (
-    echo ERROR: GTM crawler virtual environment not found: %CRAWLER_PY%
-    echo Create it with:
-    echo cd engines\company_crawler ^&^& python -m venv .venv
-    echo .venv\Scripts\python.exe -m pip install -e .
+    echo GTM crawler virtual environment not found - creating it...
+    pushd "%CRAWLER_DIR%"
+    py -3.12 -m venv .venv 2>nul
+    if errorlevel 1 python -m venv .venv
+    popd
+    if not exist "%CRAWLER_PY%" (
+        echo ERROR: Could not create the GTM crawler's virtual environment. Is Python 3.11+ on PATH?
+        exit /b 1
+    )
+)
+
+echo Installing/verifying GTM crawler package...
+"%CRAWLER_PY%" -m pip install -q --upgrade pip
+pushd "%CRAWLER_DIR%"
+"%CRAWLER_PY%" -m pip install -q -e .
+set "CRAWLER_INSTALL_RC=%errorlevel%"
+popd
+if not "%CRAWLER_INSTALL_RC%"=="0" (
+    echo ERROR: Failed to install the GTM crawler package.
     exit /b 1
 )
 
@@ -49,6 +74,16 @@ if not defined GTM__DATABASE__URL (
     echo separate from DATABASE_URL^). Example:
     echo   GTM__DATABASE__URL=postgresql+psycopg://user:@127.0.0.1:5432/coirei_intelligence
     exit /b 1
+)
+echo %GTM__DATABASE__URL%| findstr /i "+asyncpg" >nul
+if not errorlevel 1 (
+    REM The crawler's migrations and ORM run synchronously (psycopg); asyncpg
+    REM only works with SQLAlchemy's async engine and fails deep inside
+    REM Alembic ("MissingGreenlet") if it ends up here.
+    echo WARNING: GTM__DATABASE__URL used the async 'asyncpg' driver; the GTM
+    echo crawler needs the sync 'psycopg' driver. Auto-correcting for this run
+    echo - fix it in .env to silence this warning.
+    set "GTM__DATABASE__URL=%GTM__DATABASE__URL:+asyncpg=+psycopg%"
 )
 set "GTM__API__TOKEN=%CRAWLER_SERVICE_TOKEN%"
 set "GTM__LLM__API_KEY=%GROQ_API_KEY%"
@@ -82,6 +117,11 @@ if errorlevel 1 (
     echo Use 127.0.0.1 instead of localhost in DATABASE_URL.
     echo Check Windows Services to ensure PostgreSQL is running.
     echo Example: net start postgresql-x64-18
+    echo.
+    echo If the error above says "Can't locate revision identified by '...'",
+    echo the target database already has a migration history that doesn't
+    echo belong to this codebase ^(e.g. it was used by a different app or an
+    echo older checkout^). Point DATABASE_URL at a fresh, empty database.
     exit /b 1
 )
 
@@ -95,6 +135,11 @@ popd
 if not "%CRAWLER_MIGRATE_RC%"=="0" (
     echo.
     echo ERROR: GTM crawler migration failed.
+    echo.
+    echo If the error above says "Can't locate revision identified by '...'",
+    echo the target database already has a migration history that doesn't
+    echo belong to this codebase. Point GTM__DATABASE__URL at a fresh, empty
+    echo database, separate from DATABASE_URL.
     exit /b 1
 )
 

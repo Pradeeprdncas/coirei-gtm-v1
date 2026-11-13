@@ -11,21 +11,35 @@ CRAWLER_DIR="$ROOT/engines/company_crawler"
 CRAWLER_PY="$CRAWLER_DIR/.venv/bin/python"
 LOG_DIR="$ROOT/.run-logs"
 
+find_python() {
+  for candidate in python3.12 python3.11 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 if [[ ! -x "$PY" ]]; then
-  echo "ERROR: Virtual environment not found: $PY"
-  echo "Create it with:"
-  echo "python3 -m venv .venv"
-  echo ".venv/bin/pip install -r requirements.txt"
-  exit 1
+  SYS_PY="$(find_python)" || { echo "ERROR: No python3 found on PATH. Install Python 3.11+."; exit 1; }
+  echo "Main virtual environment not found — creating it ($ROOT/.venv)..."
+  "$SYS_PY" -m venv "$ROOT/.venv"
 fi
 
+echo "Installing/verifying main API requirements..."
+"$PY" -m pip install -q --upgrade pip
+"$PY" -m pip install -q -r "$ROOT/requirements.txt"
+
 if [[ ! -x "$CRAWLER_PY" ]]; then
-  echo "ERROR: GTM crawler virtual environment not found: $CRAWLER_PY"
-  echo "Create it with:"
-  echo "cd engines/company_crawler && python3 -m venv .venv"
-  echo ".venv/bin/pip install -e ."
-  exit 1
+  SYS_PY="$(find_python)" || { echo "ERROR: No python3 found on PATH. Install Python 3.11+."; exit 1; }
+  echo "GTM crawler virtual environment not found — creating it ($CRAWLER_DIR/.venv)..."
+  "$SYS_PY" -m venv "$CRAWLER_DIR/.venv"
 fi
+
+echo "Installing/verifying GTM crawler package..."
+"$CRAWLER_PY" -m pip install -q --upgrade pip
+(cd "$CRAWLER_DIR" && "$CRAWLER_PY" -m pip install -q -e .)
 
 if [[ ! -f "$ROOT/.env" && -z "${DATABASE_URL:-}" ]]; then
   echo "ERROR: Create a .env file with DATABASE_URL and application secrets."
@@ -50,6 +64,15 @@ if [[ -z "${GTM__DATABASE__URL:-}" ]]; then
   echo "histories). Example:"
   echo "  GTM__DATABASE__URL=postgresql+psycopg://user:@127.0.0.1:5432/coirei_intelligence"
   exit 1
+fi
+if [[ "$GTM__DATABASE__URL" == *"+asyncpg"* ]]; then
+  # The crawler's migrations and ORM run synchronously (psycopg); asyncpg only
+  # works with SQLAlchemy's async engine and fails deep inside Alembic
+  # ("MissingGreenlet") if it ends up here.
+  echo "WARNING: GTM__DATABASE__URL used the async 'asyncpg' driver; the GTM"
+  echo "crawler needs the sync 'psycopg' driver. Auto-correcting for this run"
+  echo "— fix it in .env to silence this warning."
+  export GTM__DATABASE__URL="${GTM__DATABASE__URL/+asyncpg/+psycopg}"
 fi
 export GTM__API__TOKEN="${CRAWLER_SERVICE_TOKEN:-}"
 export GTM__LLM__API_KEY="${GROQ_API_KEY:-}"
@@ -195,11 +218,21 @@ for port in 8000 8001 8002; do
   fi
 done
 
+migration_hint() {
+  echo ""
+  echo "If the error above says \"Can't locate revision identified by '...'\","
+  echo "the target database already has a migration history that doesn't"
+  echo "belong to this codebase (e.g. it was used by a different app or an"
+  echo "older checkout). Point DATABASE_URL / GTM__DATABASE__URL in .env at a"
+  echo "fresh, empty database, or ask whoever set up that database how its"
+  echo "schema maps to this repo's migrations before running this script again."
+}
+
 echo "Applying Alembic migrations (main)..."
-"$PY" -m alembic upgrade head
+"$PY" -m alembic upgrade head || { migration_hint; exit 1; }
 
 echo "Applying Alembic migrations (GTM crawler)..."
-(cd "$CRAWLER_DIR" && "$CRAWLER_PY" -m alembic upgrade head)
+(cd "$CRAWLER_DIR" && "$CRAWLER_PY" -m alembic upgrade head) || { migration_hint; exit 1; }
 
 mkdir -p "$LOG_DIR"
 export PYTHONUNBUFFERED=1
