@@ -41,6 +41,21 @@ echo "Installing/verifying GTM crawler package..."
 "$CRAWLER_PY" -m pip install -q --upgrade pip
 (cd "$CRAWLER_DIR" && "$CRAWLER_PY" -m pip install -q -e .)
 
+# psycopg's binary wheel ships a compiled DLL; on a locked-down Windows box
+# (Application Control / WDAC) loading it is blocked outright, and the
+# pure-Python fallback needs a system libpq that usually isn't there either.
+# pg8000 is pure Python — no native extension — and is a drop-in replacement
+# purely via the connection URL's driver name (postgresql+pg8000://...).
+NEED_PG8000=0
+if ! "$CRAWLER_PY" -c "import psycopg" >/dev/null 2>&1; then
+  echo "WARNING: psycopg could not be loaded in the GTM crawler's virtual"
+  echo "environment (often a Windows Application Control / WDAC policy"
+  echo "blocking its native DLL). Installing the pure-Python pg8000 driver"
+  echo "as a fallback..."
+  "$CRAWLER_PY" -m pip install -q "pg8000>=1.31,<2"
+  NEED_PG8000=1
+fi
+
 if [[ ! -f "$ROOT/.env" && -z "${DATABASE_URL:-}" ]]; then
   echo "ERROR: Create a .env file with DATABASE_URL and application secrets."
   exit 1
@@ -66,13 +81,16 @@ if [[ -z "${GTM__DATABASE__URL:-}" ]]; then
   exit 1
 fi
 if [[ "$GTM__DATABASE__URL" == *"+asyncpg"* ]]; then
-  # The crawler's migrations and ORM run synchronously (psycopg); asyncpg only
-  # works with SQLAlchemy's async engine and fails deep inside Alembic
+  # The crawler's migrations and ORM run synchronously; asyncpg only works
+  # with SQLAlchemy's async engine and fails deep inside Alembic
   # ("MissingGreenlet") if it ends up here.
   echo "WARNING: GTM__DATABASE__URL used the async 'asyncpg' driver; the GTM"
-  echo "crawler needs the sync 'psycopg' driver. Auto-correcting for this run"
+  echo "crawler needs a sync driver. Auto-correcting for this run"
   echo "— fix it in .env to silence this warning."
-  export GTM__DATABASE__URL="${GTM__DATABASE__URL/+asyncpg/+psycopg}"
+  export GTM__DATABASE__URL="$(sed -E 's#^postgresql(\+[A-Za-z0-9_]+)?://#postgresql+psycopg://#' <<<"$GTM__DATABASE__URL")"
+fi
+if [[ "$NEED_PG8000" == "1" && "$GTM__DATABASE__URL" != *"+pg8000"* ]]; then
+  export GTM__DATABASE__URL="$(sed -E 's#^postgresql(\+[A-Za-z0-9_]+)?://#postgresql+pg8000://#' <<<"$GTM__DATABASE__URL")"
 fi
 export GTM__API__TOKEN="${CRAWLER_SERVICE_TOKEN:-}"
 export GTM__LLM__API_KEY="${GROQ_API_KEY:-}"

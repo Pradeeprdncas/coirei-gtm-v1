@@ -51,6 +51,22 @@ if not "%CRAWLER_INSTALL_RC%"=="0" (
     exit /b 1
 )
 
+REM psycopg's binary wheel ships a compiled DLL; on a locked-down Windows box
+REM (Application Control / WDAC) loading it is blocked outright, and its
+REM pure-Python fallback needs a system libpq that usually isn't there
+REM either. pg8000 is pure Python - no native extension - and is a drop-in
+REM replacement purely via the connection URL's driver name.
+set "NEED_PG8000="
+"%CRAWLER_PY%" -c "import psycopg" >nul 2>&1
+if errorlevel 1 (
+    echo WARNING: psycopg could not be loaded in the GTM crawler's virtual
+    echo environment ^(often a Windows Application Control / WDAC policy
+    echo blocking its native DLL^). Installing the pure-Python pg8000 driver
+    echo as a fallback...
+    "%CRAWLER_PY%" -m pip install -q "pg8000>=1.31,<2"
+    set "NEED_PG8000=1"
+)
+
 if not exist ".env" if not defined DATABASE_URL (
     echo ERROR: Create .env with DATABASE_URL and secrets.
     exit /b 1
@@ -81,9 +97,17 @@ if not errorlevel 1 (
     REM only works with SQLAlchemy's async engine and fails deep inside
     REM Alembic ("MissingGreenlet") if it ends up here.
     echo WARNING: GTM__DATABASE__URL used the async 'asyncpg' driver; the GTM
-    echo crawler needs the sync 'psycopg' driver. Auto-correcting for this run
+    echo crawler needs a sync driver. Auto-correcting for this run
     echo - fix it in .env to silence this warning.
     set "GTM__DATABASE__URL=%GTM__DATABASE__URL:+asyncpg=+psycopg%"
+)
+if defined NEED_PG8000 (
+    REM Delayed expansion (!VAR!) is required here: inside one parenthesized
+    REM block, %VAR% is substituted once at parse time, so each line below
+    REM would see the ORIGINAL value instead of the previous line's result.
+    set "GTM__DATABASE__URL=!GTM__DATABASE__URL:postgresql+psycopg://=postgresql+pg8000://!"
+    set "GTM__DATABASE__URL=!GTM__DATABASE__URL:postgresql+asyncpg://=postgresql+pg8000://!"
+    set "GTM__DATABASE__URL=!GTM__DATABASE__URL:postgresql://=postgresql+pg8000://!"
 )
 set "GTM__API__TOKEN=%CRAWLER_SERVICE_TOKEN%"
 set "GTM__LLM__API_KEY=%GROQ_API_KEY%"

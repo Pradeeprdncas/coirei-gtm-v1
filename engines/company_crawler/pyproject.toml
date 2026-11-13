@@ -39,6 +39,11 @@ ocr = ["pytesseract>=0.3.10,<1", "Pillow>=10,<12"]
 pdf = ["pdfplumber>=0.11,<0.12"]
 # HTTP/2 (fetch.http2 = true; approved as opt-in 2026-09-29).
 http2 = ["h2>=4.1,<5"]
+# Pure-Python Postgres driver, no compiled extension. Use it (and
+# postgresql+pg8000:// in GTM__DATABASE__URL) where psycopg[binary]'s native
+# DLL is blocked by a Windows Application Control / WDAC policy and libpq
+# isn't installed for psycopg's pure-Python fallback either.
+pg8000 = ["pg8000>=1.31,<2"]
 dev = [
     "h2>=4.1,<5",
     # In-memory TLS certificates for the local HTTPS/HTTP/2 test servers.

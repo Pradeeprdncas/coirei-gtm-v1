@@ -24,6 +24,8 @@ Provides-Extra: pdf
 Requires-Dist: pdfplumber<0.12,>=0.11; extra == "pdf"
 Provides-Extra: http2
 Requires-Dist: h2<5,>=4.1; extra == "http2"
+Provides-Extra: pg8000
+Requires-Dist: pg8000<2,>=1.31; extra == "pg8000"
 Provides-Extra: dev
 Requires-Dist: h2<5,>=4.1; extra == "dev"
 Requires-Dist: trustme>=1.1; extra == "dev"
