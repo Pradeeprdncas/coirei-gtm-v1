@@ -2,44 +2,26 @@
 """Company-to-crawler intelligence mapping."""
 
 from alembic import op
-import sqlalchemy as sa
+
+from app.core.db import Base
+from app.models.intelligence import IntelligenceLink
 
 revision = "0003_intelligence_links"
 down_revision = "0002_competitors"
 branch_labels = None
 depends_on = None
 
+TABLES = [IntelligenceLink.__table__]
+
 
 def upgrade():
-    op.create_table(
-        "company_intelligence_links",
-        sa.Column(
-            "company_id",
-            sa.BigInteger(),
-            sa.ForeignKey(
-                "companies.id",
-                ondelete="CASCADE",
-            ),
-            primary_key=True,
-        ),
-        sa.Column(
-            "crawler_company_id",
-            sa.BigInteger(),
-            nullable=False,
-        ),
-        sa.Column(
-            "crawler_job_id",
-            sa.BigInteger(),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-    )
+    # 0001_initial's blanket Base.metadata.create_all() already creates every
+    # table registered on Base.metadata at that point, including this one (its
+    # model is imported eagerly in env.py) — create_all() checks existence
+    # first and no-ops here, unlike a raw op.create_table() which would always
+    # fail with "already exists" on a fresh database. Same pattern as 0002.
+    Base.metadata.create_all(bind=op.get_bind(), tables=TABLES)
 
 
 def downgrade():
-    op.drop_table("company_intelligence_links")
+    Base.metadata.drop_all(bind=op.get_bind(), tables=list(reversed(TABLES)))

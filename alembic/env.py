@@ -27,8 +27,13 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations():
+    # statement_cache_size=0: asyncpg caches prepared statements by default, and
+    # a cached plan can be resubmitted after DDL changes the catalog mid-transaction
+    # (every migration here runs inside one transaction), which has shown up as a
+    # CREATE TABLE appearing to execute twice. DDL connections don't need the cache.
     engine = async_engine_from_config(config.get_section(config.config_ini_section, {}),
-                                      prefix='sqlalchemy.', poolclass=pool.NullPool)
+                                      prefix='sqlalchemy.', poolclass=pool.NullPool,
+                                      connect_args={'statement_cache_size': 0})
     async with engine.connect() as conn:
         await conn.run_sync(do_run_migrations)
     await engine.dispose()
