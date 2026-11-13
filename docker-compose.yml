@@ -1,0 +1,120 @@
+# One Postgres server hosting both databases (coirei_mvp, coirei_intelligence
+# — see docker/postgres-init/01-create-databases.sql), plus all five app
+# processes. Secrets/plain config come from the root .env (loaded two ways:
+# env_file passes every key straight into each container; ${VAR} below reads
+# the same file for compose-time substitution, for the handful of values that
+# need to change for container networking or get forwarded under a
+# different name to the GTM crawler).
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose logs -f gtm-api
+#   docker compose down            # keep data (named volumes)
+#   docker compose down -v         # wipe databases too
+
+x-main-app: &main-app
+  build: .
+  image: coirei-main
+  env_file: .env
+  environment: &main-app-env
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/coirei_mvp
+    COMPETITOR_INTERNAL_URL: http://competitor-api:8001
+    CRAWLER_BASE_URL: http://gtm-api:8002
+  volumes:
+    - app_data:/app/data
+  depends_on:
+    main-migrate:
+      condition: service_completed_successfully
+
+x-gtm-app: &gtm-app
+  build: ./engines/company_crawler
+  image: coirei-gtm-crawler
+  env_file: .env
+  environment: &gtm-app-env
+    GTM__DATABASE__URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/coirei_intelligence
+    GTM__API__TOKEN: ${CRAWLER_SERVICE_TOKEN:-}
+    GTM__LLM__API_KEY: ${GROQ_API_KEY:-}
+    GTM__LLM__BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+    GTM__LLM__MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
+    GTM__SEARCH__API_KEY: ${TAVILY_API_KEY:-}
+    GTM__API__CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+  volumes:
+    - gtm_data:/app/data
+  depends_on:
+    gtm-migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: coirei_mvp
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  main-migrate:
+    build: .
+    image: coirei-main
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/coirei_mvp
+      JWT_SECRET: ${JWT_SECRET:-REPLACE_WITH_32_PLUS_RANDOM_CHARACTERS_BEFORE_RUNNING}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  main-api:
+    <<: *main-app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  competitor-api:
+    <<: *main-app
+    command: ["uvicorn", "app.competitors.api:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "127.0.0.1:8001:8001"
+
+  competitor-worker:
+    <<: *main-app
+    command: ["python", "-m", "app.competitors.worker"]
+
+  gtm-migrate:
+    build: ./engines/company_crawler
+    image: coirei-gtm-crawler
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      GTM__DATABASE__URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/coirei_intelligence
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  gtm-api:
+    <<: *gtm-app
+    command: ["gtm-api"]
+    environment:
+      <<: *gtm-app-env
+      GTM__API__HOST: "0.0.0.0"
+    ports:
+      - "127.0.0.1:8002:8002"
+
+  gtm-worker:
+    <<: *gtm-app
+    command: ["gtm-worker"]
+
+volumes:
+  pgdata:
+  app_data:
+  gtm_data:

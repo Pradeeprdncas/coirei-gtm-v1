@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+data/
+.env
+.DS_Store
+gtm_crawler.egg-info/
