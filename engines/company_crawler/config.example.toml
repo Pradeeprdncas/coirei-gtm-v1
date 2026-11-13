@@ -209,6 +209,8 @@ token = ""
 previous_token = ""
 # Swagger UI at /docs. Local development only; staging/prod refuse it.
 docs = false
+# Browser origins allowed to call this API (CORS). Empty: no CORS headers.
+cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 [market]
 # Market research (gtm_crawler.market; docs/MARKET_ENGINE_IMPLEMENTATION.md).

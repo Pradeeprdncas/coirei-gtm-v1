@@ -119,6 +119,8 @@ set "GTM__LLM__SECONDARY_BASE_URL=%OLLAMA_BASE_URL:/api=/v1%"
 set "GTM__LLM__SECONDARY_MODEL=%OLLAMA_MODEL%"
 set "GTM__LLM__SECONDARY_API_KEY=%OLLAMA_API_KEY%"
 set "GTM__SEARCH__API_KEY=%TAVILY_API_KEY%"
+if not defined CORS_ORIGINS set "CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173"
+set "GTM__API__CORS_ORIGINS=%CORS_ORIGINS%"
 
 if not defined GTM__API__TOKEN (
     echo ERROR: Set CRAWLER_SERVICE_TOKEN in .env ^(shared with GTM__API__TOKEN^).
@@ -209,11 +211,11 @@ start "Coirei Discovery Worker" /D "%CD%" cmd /k ".venv\Scripts\python.exe -m ap
 
 echo Starting GTM crawler API on port 8002...
 
-start "Coirei GTM Crawler API 8002" /D "%CRAWLER_DIR%" cmd /k "set GTM__DATABASE__URL=%GTM__DATABASE__URL%&& set GTM__API__TOKEN=%GTM__API__TOKEN%&& set GTM__LLM__API_KEY=%GTM__LLM__API_KEY%&& set GTM__LLM__BASE_URL=%GTM__LLM__BASE_URL%&& set GTM__LLM__MODEL=%GTM__LLM__MODEL%&& set GTM__LLM__SECONDARY_BASE_URL=%GTM__LLM__SECONDARY_BASE_URL%&& set GTM__LLM__SECONDARY_MODEL=%GTM__LLM__SECONDARY_MODEL%&& set GTM__LLM__SECONDARY_API_KEY=%GTM__LLM__SECONDARY_API_KEY%&& set GTM__SEARCH__API_KEY=%GTM__SEARCH__API_KEY%&& .venv\Scripts\python.exe -m gtm_crawler.api"
+start "Coirei GTM Crawler API 8002" /D "%CRAWLER_DIR%" cmd /k "set GTM__DATABASE__URL=%GTM__DATABASE__URL%&& set GTM__API__TOKEN=%GTM__API__TOKEN%&& set GTM__LLM__API_KEY=%GTM__LLM__API_KEY%&& set GTM__LLM__BASE_URL=%GTM__LLM__BASE_URL%&& set GTM__LLM__MODEL=%GTM__LLM__MODEL%&& set GTM__LLM__SECONDARY_BASE_URL=%GTM__LLM__SECONDARY_BASE_URL%&& set GTM__LLM__SECONDARY_MODEL=%GTM__LLM__SECONDARY_MODEL%&& set GTM__LLM__SECONDARY_API_KEY=%GTM__LLM__SECONDARY_API_KEY%&& set GTM__SEARCH__API_KEY=%GTM__SEARCH__API_KEY%&& set GTM__API__CORS_ORIGINS=%GTM__API__CORS_ORIGINS%&& .venv\Scripts\python.exe -m gtm_crawler.api"
 
 echo Starting GTM crawler worker...
 
-start "Coirei GTM Crawler Worker" /D "%CRAWLER_DIR%" cmd /k "set GTM__DATABASE__URL=%GTM__DATABASE__URL%&& set GTM__API__TOKEN=%GTM__API__TOKEN%&& set GTM__LLM__API_KEY=%GTM__LLM__API_KEY%&& set GTM__LLM__BASE_URL=%GTM__LLM__BASE_URL%&& set GTM__LLM__MODEL=%GTM__LLM__MODEL%&& set GTM__LLM__SECONDARY_BASE_URL=%GTM__LLM__SECONDARY_BASE_URL%&& set GTM__LLM__SECONDARY_MODEL=%GTM__LLM__SECONDARY_MODEL%&& set GTM__LLM__SECONDARY_API_KEY=%GTM__LLM__SECONDARY_API_KEY%&& set GTM__SEARCH__API_KEY=%GTM__SEARCH__API_KEY%&& .venv\Scripts\python.exe -m gtm_crawler.worker"
+start "Coirei GTM Crawler Worker" /D "%CRAWLER_DIR%" cmd /k "set GTM__DATABASE__URL=%GTM__DATABASE__URL%&& set GTM__API__TOKEN=%GTM__API__TOKEN%&& set GTM__LLM__API_KEY=%GTM__LLM__API_KEY%&& set GTM__LLM__BASE_URL=%GTM__LLM__BASE_URL%&& set GTM__LLM__MODEL=%GTM__LLM__MODEL%&& set GTM__LLM__SECONDARY_BASE_URL=%GTM__LLM__SECONDARY_BASE_URL%&& set GTM__LLM__SECONDARY_MODEL=%GTM__LLM__SECONDARY_MODEL%&& set GTM__LLM__SECONDARY_API_KEY=%GTM__LLM__SECONDARY_API_KEY%&& set GTM__SEARCH__API_KEY=%GTM__SEARCH__API_KEY%&& set GTM__API__CORS_ORIGINS=%GTM__API__CORS_ORIGINS%&& .venv\Scripts\python.exe -m gtm_crawler.worker"
 
 echo.
 echo ==========================================

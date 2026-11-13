@@ -100,6 +100,7 @@ export GTM__LLM__SECONDARY_BASE_URL="${OLLAMA_BASE_URL%/api}/v1"
 export GTM__LLM__SECONDARY_MODEL="${OLLAMA_MODEL:-}"
 export GTM__LLM__SECONDARY_API_KEY="${OLLAMA_API_KEY:-}"
 export GTM__SEARCH__API_KEY="${TAVILY_API_KEY:-}"
+export GTM__API__CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
 
 if [[ -z "$GTM__API__TOKEN" ]]; then
   echo "ERROR: Set CRAWLER_SERVICE_TOKEN in .env (shared with GTM__API__TOKEN)."
