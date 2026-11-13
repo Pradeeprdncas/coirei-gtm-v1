@@ -1,10 +1,12 @@
 
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import current_user
 from app.models.entities import User
@@ -133,6 +135,70 @@ async def intelligence_status(
         "company_id": company_id,
         "crawl": job,
     })
+
+
+@router.get(
+    "/{company_id}/intelligence/live-screenshot/{fetch_id}",
+)
+async def intelligence_live_screenshot(
+    company_id: int,
+    fetch_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Proxies the GTM crawler's page screenshot so the frontend never needs the
+    crawler's own service token — this endpoint is reachable with the user's
+    normal session, same as every other /companies/{company_id}/... route."""
+    await owned_company(db, company_id, user.id)
+
+    link = await db.get(IntelligenceLink, company_id)
+
+    if link is None:
+        raise HTTPException(
+            404,
+            detail={
+                "code": "INTELLIGENCE_NOT_STARTED",
+                "message": "Start a crawler job first",
+            },
+        )
+
+    cfg = settings()
+    url = (
+        f"{cfg.crawler_base_url.rstrip('/')}/v1/crawls/"
+        f"{link.crawler_job_id}/live/{fetch_id}.png"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+            upstream = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {cfg.crawler_service_token}"},
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            503,
+            detail={
+                "code": "CRAWLER_UNAVAILABLE",
+                "message": "Cannot connect to crawler service",
+            },
+        ) from exc
+
+    if upstream.status_code == 404:
+        raise HTTPException(
+            404,
+            detail={"code": "SCREENSHOT_NOT_FOUND", "message": "No such page in this crawl"},
+        )
+    if upstream.status_code != 200:
+        raise HTTPException(
+            502,
+            detail={"code": "CRAWLER_UPSTREAM_ERROR", "message": "Crawler request failed"},
+        )
+
+    return Response(
+        upstream.content,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @router.get(

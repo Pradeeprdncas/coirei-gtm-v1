@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -9,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.security import current_user
 from app.models.entities import Company, Conversation, ExtractionJob, FieldAudit, GapAnswer, GapQuestion, Message, Product, Source, User
+from app.models.intelligence import IntelligenceLink
 from app.schemas.api import ChatInput, GapAnswers, ok
 from app.services.common import domain, enough, message, onboarding_conversation, owned_company, source_from_text, field_meta_set, safe_name
 from app.services.documents import extract_document
+from app.services.intelligence.client import crawler_request
 from app.services.llm import json_completion
 from app.services.pipeline import process_job
 from app.services.rag.core import retrieve
@@ -187,16 +190,123 @@ async def add_context(company_id: int, background: BackgroundTasks,
                'conversation_url': f'/companies/{company_id}/conversation',
                'status_url': f'/companies/{company_id}/status'})
 
+RUNNING_MAIN_STATES = {'queued', 'running'}
+RUNNING_GTM_STATES = {'CREATED', 'QUEUED', 'RUNNING', 'FINALIZING', 'PAUSED'}
+# How long the "live" pick stays on one page before a newer fetch replaces it,
+# so the frontend's live view doesn't flicker on every 5s poll.
+_LIVE_PICK_STABLE_SECONDS = 10.0
+_live_pick_cache: dict[int, tuple[int, float]] = {}
+
+
+def _stable_live_pick(company_id: int, pages: list[dict]) -> dict | None:
+    if not pages:
+        _live_pick_cache.pop(company_id, None)
+        return None
+    newest = pages[0]
+    cached = _live_pick_cache.get(company_id)
+    now = time.monotonic()
+    if cached:
+        cached_fetch_id, picked_at = cached
+        if now - picked_at < _LIVE_PICK_STABLE_SECONDS:
+            match = next((p for p in pages if p.get('fetch_id') == cached_fetch_id), None)
+            if match:
+                return match
+    _live_pick_cache[company_id] = (newest.get('fetch_id'), now)
+    return newest
+
+
+async def _intelligence_snapshot(company_id: int, db: AsyncSession) -> dict | None:
+    """Best-effort status of the GTM crawler's deep-crawl job (started via
+    POST .../intelligence/crawl), if one exists for this company. Never raises:
+    a crawler hiccup degrades this section instead of failing the whole poll."""
+    link = await db.get(IntelligenceLink, company_id)
+    if link is None:
+        return None
+    try:
+        job = await crawler_request('GET', f'/v1/crawls/{link.crawler_job_id}')
+        live = await crawler_request('GET', f'/v1/crawls/{link.crawler_job_id}/live?limit=5')
+    except HTTPException as exc:
+        detail = exc.detail.get('message') if isinstance(exc.detail, dict) else str(exc.detail)
+        return {'crawler_job_id': link.crawler_job_id, 'status': 'UNAVAILABLE', 'stage': None,
+                'url_report': [], 'live_browser_url': None, 'error_summary': detail}
+    pages = live.get('pages') or []
+    url_report = [{
+        'url': p.get('url'), 'page_type': p.get('page_type'), 'fetched_at': p.get('fetched_at'),
+        'screenshot_url': (f'/companies/{company_id}/intelligence/live-screenshot/{p["fetch_id"]}'
+                           if p.get('fetch_id') is not None else None),  # fmt: skip
+    } for p in pages]
+    pick = _stable_live_pick(company_id, pages)
+    live_browser_url = (f'/companies/{company_id}/intelligence/live-screenshot/{pick["fetch_id"]}'
+                        if pick and pick.get('fetch_id') is not None else None)  # fmt: skip
+    return {
+        'crawler_job_id': link.crawler_job_id, 'status': job.get('status'), 'stage': job.get('stage'),
+        'site_crawls': job.get('site_crawls'), 'result': job.get('result'),
+        'error_summary': job.get('error_summary'), 'url_report': url_report,
+        'live_browser_url': live_browser_url,
+    }
+
+
+def _merge_status(main_status: str, gtm_status: str | None) -> str:
+    """One of running / success / failed / not_started, combining the main
+    onboarding pipeline (add_context) and the GTM deep-crawl (intelligence/crawl).
+    Either pipeline still going keeps it "running"; either one failing is "failed";
+    otherwise "success" once at least one has completed."""
+    if main_status in RUNNING_MAIN_STATES or gtm_status in RUNNING_GTM_STATES:
+        return 'running'
+    if main_status == 'failed' or gtm_status == 'FAILED':
+        return 'failed'
+    if main_status == 'completed' or gtm_status == 'COMPLETED':
+        return 'success'
+    if main_status == 'not_started' and gtm_status in (None, 'CANCELLED', 'UNAVAILABLE'):
+        return 'not_started'
+    return 'running'
+
+
 @router.get('/{company_id}/status')
 async def status(company_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
     company = await owned_company(db, company_id, user.id)
     job = await db.scalar(select(ExtractionJob).where(ExtractionJob.company_id == company_id)
                           .order_by(ExtractionJob.id.desc()).limit(1))
+    intelligence = await _intelligence_snapshot(company_id, db)
+
+    main_status = job.status if job else 'not_started'
+    overall_status = _merge_status(main_status, intelligence.get('status') if intelligence else None)
+
+    messages: list[str] = []
+    if job and job.current_url:
+        messages.append(f'Crawling {job.current_url}')
+    elif job and job.stage == 'indexing':
+        messages.append('Indexing extracted pages')
+    elif job and job.stage == 'extracting':
+        messages.append('Extracting company and product details')
+    if job and job.status == 'completed':
+        product_count = await db.scalar(
+            select(func.count()).select_from(Product).where(Product.company_id == company_id))
+        messages.append(f'{product_count} product(s) found' if product_count else 'Research complete')
+    if job and job.status == 'failed':
+        messages.append(f'Research failed: {job.error}' if job.error else 'Research failed')
+    if intelligence:
+        gtm_status = intelligence['status']
+        if gtm_status in RUNNING_GTM_STATES:
+            messages.append(f'Deep crawl: {intelligence.get("stage") or "running"}')
+        elif gtm_status == 'COMPLETED':
+            messages.append('Deep crawl complete')
+        elif gtm_status == 'FAILED':
+            messages.append('Deep crawl failed')
+        elif gtm_status == 'CANCELLED':
+            messages.append('Deep crawl cancelled')
+        elif gtm_status == 'UNAVAILABLE':
+            messages.append('Deep crawl status temporarily unavailable')
+
     return ok({'company_id': company_id, 'company_status': company.status,
-               'job_id': job.id if job else None, 'status': job.status if job else 'not_started',
+               'job_id': job.id if job else None, 'status': main_status,
                'stage': job.stage if job else 'created', 'current_url':job.current_url if job else None,
                'pages_done':job.pages_done if job else 0,'pages_total': job.pages_total if job else 0,
                'warnings': job.warnings if job else [], 'error': job.error if job else None,
+               'overall_status': overall_status, 'messages': messages,
+               'intelligence': intelligence,
+               'live_browser_url': intelligence.get('live_browser_url') if intelligence else None,
+               'url_report': intelligence.get('url_report', []) if intelligence else [],
                'next_action': 'verify_products' if company.status in {'ready_to_verify','complete'} else
                               'add_business_context' if company.status=='needs_context' else 'watch_status'})
 
