@@ -6,12 +6,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.security import current_user
-from app.models.entities import Company, FieldAudit, FieldClaim, PricePlan, Product, User
+from app.models.entities import Company, FieldAudit, FieldClaim, PricePlan, Product, Source, User
 from app.schemas.api import PRODUCT_EDITABLE, PRODUCT_KINDS, ProductCreate, ProductPatch, VerifyProduct, ok
 from app.services.common import (
     company_profile_message, field_meta_set, field_status, field_statuses, message, owned_company,
     owned_product, safe_name,
 )
+from app.services.presentation import field_meta_view, product_card, product_view
 
 router = APIRouter(tags=['products'])
 
@@ -66,9 +67,20 @@ async def products(company_id:int, db:AsyncSession=Depends(get_db), user:User=De
     company=await owned_company(db,company_id,user.id)
     rows=(await db.scalars(select(Product).where(Product.company_id==company.id)
                            .order_by(Product.id))).all()
+    plans_by_product: dict[int, list[PricePlan]] = {}
+    if rows:
+        for plan in (await db.scalars(select(PricePlan).where(
+                PricePlan.product_id.in_([p.id for p in rows])).order_by(PricePlan.id))).all():
+            plans_by_product.setdefault(plan.product_id, []).append(plan)
     return ok({'company_id':company_id,'company_name':company.name,'total_products':len(rows),
-               'products':[dict(product_dict(p), verification={'can_verify':not blockers(p),
-                            'blocking_reasons':blockers(p)},
+               'products':[dict(product_card(p, company, plans_by_product.get(p.id, [])),
+                            verification={'can_verify':not blockers(p),'blocking_reasons':blockers(p)},
+                            field_status=field_statuses(p, p.field_meta, PRODUCT_STATUS_FIELDS),
+                            revision=p.revision, website_url=p.website_url or '',
+                            candidate_kind=p.candidate_kind, product_status=p.status)
+                           for p in rows],
+               'products_detail':[dict(product_dict(p),
+                            verification={'can_verify':not blockers(p),'blocking_reasons':blockers(p)},
                             field_status=field_statuses(p, p.field_meta, PRODUCT_STATUS_FIELDS))
                            for p in rows]})
 
@@ -81,14 +93,26 @@ async def detail(product_id:int, db:AsyncSession=Depends(get_db), user:User=Depe
                              .order_by(FieldClaim.id))).all()
     status = field_statuses(product, product.field_meta, PRODUCT_STATUS_FIELDS)
     status['pricing'] = field_status(product.field_meta, 'pricing', plans)
-    return ok(dict(product_dict(product),
-        pricing=[{'id':p.id,'name':p.name,'price_amount':float(p.price_amount) if p.price_amount is not None else None,
+    source_ids = {c.source_id for c in claims if c.source_id}
+    source_ids |= {(e or {}).get('source_id') for e in (product.field_meta or {}).values()
+                   if isinstance(e, dict) and e.get('source_id')}
+    source_urls = {}
+    if source_ids:
+        source_urls = {s.id: s.url for s in (await db.scalars(
+            select(Source).where(Source.id.in_([i for i in source_ids if i])))).all()}
+    payload = dict(product_dict(product),
+        pricing_raw=[{'id':p.id,'name':p.name,
+                  'price_amount':float(p.price_amount) if p.price_amount is not None else None,
                   'currency':p.currency,'unit':p.unit,'period':p.period,'is_custom':p.is_custom,
                   'quote':p.quote,'source_id':p.source_id} for p in plans],
         evidence=[{'id':c.id,'field':c.field_key,'value':c.value,'source_id':c.source_id,
+                   'source':source_urls.get(c.source_id,''),
                    'quote':c.quote,'status':c.status} for c in claims],
         field_status=status,
-        verification={'can_verify':not blockers(product),'blocking_reasons':blockers(product)}))
+        verification={'can_verify':not blockers(product),'blocking_reasons':blockers(product)})
+    payload.update(product_view(product, company, plans,
+                                field_meta_view(product.field_meta, source_urls)))
+    return ok(payload)
 
 
 def _clean_pricing(value) -> list[dict]:
@@ -201,6 +225,7 @@ async def patch_product(product_id:int, body:ProductPatch, db:AsyncSession=Depen
                        'accepted_fields':body.accept_fields})
     await db.commit()
     return ok({'product':product_dict(product),'changed':dirty,
+               'field_status':field_statuses(product, product.field_meta, PRODUCT_STATUS_FIELDS),
                'verification':{'can_verify':not blockers(product),
                                'blocking_reasons':blockers(product)}})
 
@@ -232,6 +257,7 @@ async def verify_product(
             "revision": product.revision,
             "changed": False,
             "accepted_fields": [],
+            "field_status": field_statuses(product, product.field_meta, PRODUCT_STATUS_FIELDS),
             "all_products_verified": await all_verified(
                 db, company.id
             ),
@@ -408,6 +434,7 @@ async def verify_product(
         "revision": product.revision,
         "changed": True,
         "accepted_fields": newly_accepted,
+        "field_status": field_statuses(product, product.field_meta, PRODUCT_STATUS_FIELDS),
         "all_products_verified": all_products_verified,
     })
 

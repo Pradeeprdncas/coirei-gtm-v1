@@ -235,3 +235,41 @@ def merge_suggestions(
             break
 
     return suggestions[:3]
+
+# Answer shapes the gap-question UI can render. Mirrors the GTM crawler's own
+# question vocabulary (gtm_crawler/questions.py TYPES) so one renderer handles
+# both question sources.
+MULTI_VALUE_FIELDS = {'key_features', 'products'}
+
+
+def question_type(field_key: str, suggestions: list[dict] | None) -> str:
+    """'multi_choice' | 'choice' | 'text' for one gap question.
+
+    A field that holds a list (key_features, the product catalogue) takes
+    several answers; anything else with evidence-backed suggestions is a
+    single pick; with no suggestions there is nothing to pick from, so it is
+    free text."""
+    kind = field_kind(field_key)
+    if kind in MULTI_VALUE_FIELDS:
+        return 'multi_choice'
+    return 'choice' if suggestions else 'text'
+
+
+def question_options(suggestions: list[dict] | None) -> list[dict]:
+    """The selectable options for a choice/multi_choice question, each carrying
+    its own evidence so the UI can show why it was offered."""
+    options = []
+    for index, item in enumerate(suggestions or []):
+        text = (item or {}).get('text')
+        if not text:
+            continue
+        options.append({
+            'id': f'opt-{index + 1}',
+            'label': text,
+            'value': text,
+            'source': item.get('source') or '',
+            'source_url': item.get('source_url') or '',
+            'quote': item.get('quote') or '',
+            'verified_by': item.get('verified_by') or '',
+        })
+    return options

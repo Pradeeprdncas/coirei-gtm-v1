@@ -29,7 +29,9 @@ from app.services.gap_suggestions import (
     merge_suggestions,
     normalize as normalize_text,
     page_types_for,
+    question_options,
     question_template,
+    question_type,
 )
 
 
@@ -751,6 +753,11 @@ async def generate_gap(
                 "field": field_key,
                 "question": question_text,
                 "suggestions": old_question.suggestions,
+                "type": question_type(field_key, old_question.suggestions),
+                "options": question_options(old_question.suggestions),
+                "allow_custom_answer": True,
+                "status": "needs_answer",
+                "answer": None,
             })
             continue
 
@@ -838,6 +845,9 @@ async def generate_gap(
             "field": field_key,
             "question": question_text,
             "suggestions": suggestions,
+            "type": question_type(field_key, suggestions),
+            "options": question_options(suggestions),
+            "allow_custom_answer": True,
             "status": "needs_answer",
             "answer": None,
         })
