@@ -60,6 +60,16 @@ class GapAnswers(BaseModel):
     answers: list[GapAnswerItem] = Field(min_length=1, max_length=4)
 
 
+class BusinessQuestionAnswer(BaseModel):
+    question_id: str = Field(min_length=1, max_length=80)
+    status: Literal['answered', 'dont_know', 'skipped'] = 'answered'
+    value: Any = None
+
+
+class BusinessQuestionAnswers(BaseModel):
+    answers: list[BusinessQuestionAnswer] = Field(min_length=1, max_length=100)
+
+
 class ChatInput(BaseModel):
     message: str | None = Field(default=None, max_length=4000)
     client_message_id: str | None = Field(default=None, max_length=100)

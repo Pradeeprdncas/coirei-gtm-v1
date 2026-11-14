@@ -11,7 +11,7 @@ from app.core.db import get_db
 from app.core.security import current_user
 from app.models.entities import Company, Conversation, ExtractionJob, FieldAudit, GapAnswer, GapQuestion, Message, Product, Source, User
 from app.models.intelligence import IntelligenceLink
-from app.schemas.api import ChatInput, GapAnswers, ok
+from app.schemas.api import BusinessQuestionAnswers, ChatInput, GapAnswers, ok
 from app.services.common import (
     already_known_summary, domain, enough, extraction_gaps, maybe_post_readiness_decision, message,
     missing_business_fields, onboarding_conversation, owned_company, source_from_text, field_meta_set,
@@ -590,6 +590,54 @@ async def _gtm_suggestion(
         }
 
     return None
+
+
+@router.get("/{company_id}/business-questions")
+async def get_business_questions(
+    company_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user),
+):
+    """Proxy for the GTM crawler's own rich, typed question bank (business
+    fundamentals / commercial / sales-and-marketing / gaps) — see
+    Question.TYPES in gtm_crawler/questions.py for the full set: text, number,
+    money, percent, choice, multi_choice, yes_no, each with group/choices/
+    suggested. The crawler's /questions and /answers endpoints are guarded by
+    a shared service bearer token (not per-user auth), so the frontend can't
+    call them directly — this endpoint and PUT .../business-questions below
+    are the only way to reach them."""
+    company = await owned_company(db, company_id, user.id)
+    link = await db.get(IntelligenceLink, company_id)
+    if link is None:
+        raise HTTPException(404, detail={'code': 'INTELLIGENCE_NOT_STARTED',
+                                         'message': 'Start a company crawl first'})
+    data = await crawler_request('GET', f'/v1/companies/{link.crawler_company_id}/questions')
+    return ok(data)
+
+
+@router.put("/{company_id}/business-questions")
+async def answer_business_questions(
+    company_id: int, body: BusinessQuestionAnswers,
+    db: AsyncSession = Depends(get_db), user: User = Depends(current_user),
+):
+    """Forward answers to the GTM crawler's question bank (see GET above) and
+    record them in the onboarding conversation for timeline visibility. The
+    crawler validates each value against its question's type and rejects an
+    unknown question id or a value that doesn't fit; crawler_request() turns
+    any such 4xx into a uniform 502 CRAWLER_UPSTREAM_ERROR here (it doesn't
+    pass through the crawler's own error body), so re-GET the question list
+    before retrying rather than assuming the shape was the problem."""
+    company = await owned_company(db, company_id, user.id)
+    link = await db.get(IntelligenceLink, company_id)
+    if link is None:
+        raise HTTPException(404, detail={'code': 'INTELLIGENCE_NOT_STARTED',
+                                         'message': 'Start a company crawl first'})
+    payload = {'answers': [{**a.model_dump(), 'actor': user.name} for a in body.answers]}
+    data = await crawler_request(
+        'PUT', f'/v1/companies/{link.crawler_company_id}/answers', payload=payload,
+    )
+    await message(db, company_id, 'user', 'business_questions_answered',
+                  {'answers': payload['answers']})
+    await db.commit()
+    return ok(data)
 
 
 @router.post("/{company_id}/gap-questions")
