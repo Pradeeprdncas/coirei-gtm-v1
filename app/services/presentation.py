@@ -147,11 +147,16 @@ def review_status(product) -> str:
 
 
 def last_updated(product) -> str:
+    """"14 Nov 2026, 04:15 PM".
+
+    Built from `stamp.day` rather than a strftime directive on purpose: the
+    no-pad forms are %-d on glibc but %#d on Windows, and the unsupported one
+    raises ValueError rather than degrading, which 500'd this endpoint on a
+    Windows host. Everything else here is portable."""
     stamp = getattr(product, 'updated_at', None) or getattr(product, 'verified_at', None)
     if not stamp:
         return ''
-    # "14 Nov 2026, 04:15 PM" — %-d/%-I are POSIX-only but this server is Linux/macOS.
-    return stamp.strftime('%-d %b %Y, %I:%M %p')
+    return f'{stamp.day} ' + stamp.strftime('%b %Y, %I:%M %p')
 
 
 def money(amount, currency: str | None, is_custom: bool) -> str:
