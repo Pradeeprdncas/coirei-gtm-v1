@@ -1,6 +1,7 @@
 import hashlib
 import re
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -163,11 +164,56 @@ def missing_business_fields(company: Company, products: list[Product]) -> list[t
     return items
 
 
+def _summarize_field(value: Any, max_len: int = 220) -> str:
+    """A short readable string for a JSONB business-profile field, whatever shape
+    it was stored in (plain string, {'summary': ...}, {'target_audience': ...},
+    a list, or an arbitrary dict from intelligence sync)."""
+    if isinstance(value, dict):
+        for key in ('summary', 'target_audience', 'text', 'value', 'description'):
+            if value.get(key):
+                return str(value[key])[:max_len]
+        parts = []
+        for v in value.values():
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+            elif isinstance(v, list):
+                parts.extend(str(x) for x in v if isinstance(x, str) and x.strip())
+        return '; '.join(parts)[:max_len] if parts else ''
+    if isinstance(value, list):
+        return ', '.join(str(v) for v in value[:5] if v)[:max_len]
+    return str(value)[:max_len] if value else ''
+
+
+def already_known_summary(company: Company, products: list[Product]) -> list[dict]:
+    """What the conversation should tell the user we already know — real
+    extracted values, not just "we have a business model" with no data."""
+    items: list[dict] = []
+
+    def add(label: str, value: Any):
+        text = _summarize_field(value)
+        if text:
+            items.append({'label': label, 'value': text})
+
+    add('Company name', company.name)
+    add('Industry', company.industry)
+    add('Business model', company.business_model)
+    add('Value proposition', company.value_proposition)
+    add('Ideal customer profile', company.icp)
+    add('Target market', company.market_segment)
+
+    classified = [p for p in products if p.candidate_kind in ('standalone_product', 'suite')]
+    if classified:
+        items.append({'label': 'Products', 'value': ', '.join(p.name for p in classified[:8])})
+
+    return items
+
+
 def verification_message(company: Company, products: list[Product]) -> dict:
     """Content for the 'verification_ready' conversation message."""
     items = missing_business_fields(company, products)
     return {
         'title': 'Coirei AI needs to verify some important product information.',
+        'what_i_already_know': already_known_summary(company, products),
         'missing_data': [key for key, _ in items],
         'missing_data_labels': [label for _, label in items],
         'message': ('Please click Verify Product Information below to review, update, and '
@@ -264,6 +310,7 @@ async def maybe_post_readiness_decision(db: AsyncSession, company_id: int) -> di
             'description': 'Add documents, answer gap questions, or continue with website data.',
             'next_action': 'needs_context',
             'product_count': len(products),
+            'what_i_already_know': already_known_summary(company, products),
             'missing_data': extraction_gaps(company, products),
         }
         await message(db, company_id, 'assistant', 'research_attention', content)

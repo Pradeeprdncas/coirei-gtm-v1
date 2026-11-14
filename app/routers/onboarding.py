@@ -13,9 +13,9 @@ from app.models.entities import Company, Conversation, ExtractionJob, FieldAudit
 from app.models.intelligence import IntelligenceLink
 from app.schemas.api import ChatInput, GapAnswers, ok
 from app.services.common import (
-    domain, enough, extraction_gaps, maybe_post_readiness_decision, message, missing_business_fields,
-    onboarding_conversation, owned_company, source_from_text, field_meta_set, safe_name,
-    verification_message,
+    already_known_summary, domain, enough, extraction_gaps, maybe_post_readiness_decision, message,
+    missing_business_fields, onboarding_conversation, owned_company, source_from_text, field_meta_set,
+    safe_name, verification_message,
 )
 from app.services.documents import extract_document
 from app.services.intelligence.client import crawler_request
@@ -879,6 +879,7 @@ async def answer_gaps(company_id:int, body:GapAnswers, db:AsyncSession=Depends(g
     else:
         await message(db, company_id, 'assistant', 'research_attention', {
             'next_action': 'add_business_context',
+            'what_i_already_know': already_known_summary(company, products),
             'missing_data': extraction_gaps(company, products),
         })
     await db.commit()
