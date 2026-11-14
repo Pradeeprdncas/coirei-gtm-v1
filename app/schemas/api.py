@@ -1,5 +1,5 @@
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Signup(BaseModel):
@@ -46,7 +46,14 @@ class VerifyProduct(BaseModel):
 
 class GapAnswerItem(BaseModel):
     question_id: int
-    answer: str = Field(min_length=1, max_length=5000)
+    answer: str | None = Field(default=None, max_length=5000)
+    skip: bool = False
+
+    @model_validator(mode='after')
+    def _answer_required_unless_skipped(self):
+        if not self.skip and not (self.answer or '').strip():
+            raise ValueError('answer is required unless skip is true')
+        return self
 
 
 class GapAnswers(BaseModel):
@@ -54,8 +61,15 @@ class GapAnswers(BaseModel):
 
 
 class ChatInput(BaseModel):
-    message: str = Field(min_length=1, max_length=4000)
+    message: str | None = Field(default=None, max_length=4000)
     client_message_id: str | None = Field(default=None, max_length=100)
+    action: Literal['upload_documents', 'answer_questions'] | None = None
+
+    @model_validator(mode='after')
+    def _message_or_action(self):
+        if not self.action and not (self.message or '').strip():
+            raise ValueError('message is required unless action is set')
+        return self
 
 
 COMPANY_EDITABLE = {'name','website_url','description','industry','size_band','headquarters',

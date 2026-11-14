@@ -108,3 +108,71 @@ def safe_name(name: str) -> bool:
 def enough(company: Company, products: list[Product]) -> bool:
     return bool(company.name and any(safe_name(p.name) and p.description and p.key_features
                                      for p in products if p.candidate_kind in {'standalone_product','suite'}))
+
+
+# (key, human label) for each business-profile dimension that still needs real
+# data before verification is meaningful. Single source of truth for both the
+# machine-readable `missing_data` keys and their display labels.
+def missing_business_fields(company: Company, products: list[Product]) -> list[tuple[str, str]]:
+    standalone = [p for p in products if p.candidate_kind in ('standalone_product', 'suite')]
+    items: list[tuple[str, str]] = []
+    if not company.business_model:
+        items.append(('business_model', 'Business Model'))
+    if not company.value_proposition:
+        items.append(('value_proposition', 'Value Proposition'))
+    if standalone and any(not p.positioning for p in standalone):
+        items.append(('market_positioning', 'Current Market Positioning'))
+    if standalone and any(p.pricing_status == 'not_found' for p in standalone):
+        items.append(('pricing_and_plans', 'Pricing & Plans'))
+    if not company.icp:
+        items.append(('icp', 'Ideal Customer Profile (ICP)'))
+    if not company.market_segment:
+        items.append(('target_market_segments', 'Target Market Segments'))
+    return items
+
+
+def verification_message(company: Company, products: list[Product]) -> dict:
+    """Content for the 'verification_ready' conversation message."""
+    items = missing_business_fields(company, products)
+    return {
+        'title': 'Coirei AI needs to verify some important product information.',
+        'missing_data': [key for key, _ in items],
+        'missing_data_labels': [label for _, label in items],
+        'message': ('Please click Verify Product Information below to review, update, and '
+                    'confirm the extracted details for each product before proceeding with '
+                    'your GTM strategy.'),
+        'action': {'id': 'verify_product_information', 'label': 'Verify Product Information'},
+        'next_action': 'verify_products',
+    }
+
+
+def company_profile_message(company: Company, products: list[Product]) -> dict:
+    """Content for the 'company_profile' conversation message, posted once every
+    required product has been verified."""
+    offerings = [p.name for p in products
+                if p.candidate_kind in ('standalone_product', 'suite') and p.status == 'verified']
+    size = company.size_band or (f'{company.employee_count} employees' if company.employee_count else None)
+    location = ', '.join(x for x in (company.headquarters, company.country) if x) or None
+    return {
+        'name': company.name,
+        'website_url': company.website_url,
+        'business_overview': company.description,
+        'industry': company.industry,
+        'company_size': size,
+        'location': location,
+        'founded': company.founded_year,
+        'offerings': offerings,
+        'action': {'id': 'confirm_go_to_workspace', 'label': 'Confirm & Go to Workspace'},
+    }
+
+
+def onboarding_stage(company: Company | None) -> str:
+    """The user's current onboarding stage, for login/signup responses."""
+    if company is None:
+        return 'new'
+    return {
+        'researching': 'researching',
+        'needs_context': 'needs_context',
+        'ready_to_verify': 'verification',
+        'complete': 'complete',
+    }.get(company.status, 'needs_context')

@@ -5,7 +5,7 @@ from app.core.db import get_db
 from app.core.security import current_user, make_token, password_check, password_hash
 from app.models.entities import Company, User
 from app.schemas.api import Signup, Login, ok
-from app.services.common import message, onboarding_conversation
+from app.services.common import message, onboarding_conversation, onboarding_stage
 
 router = APIRouter(prefix='/auth', tags=['auth'])
 
@@ -33,7 +33,8 @@ async def signup(body: Signup, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return ok({'access_token': make_token(user.id), 'token_type': 'bearer',
                'user': {'id': user.id, 'name': user.name, 'email': user.email},
-               'company_id': company_id})
+               'company_id': company_id,
+               'current_user_status': onboarding_stage(company if company_id else None)})
 
 
 @router.post('/login')
@@ -41,8 +42,14 @@ async def login(body: Login, db: AsyncSession = Depends(get_db)):
     user = await db.scalar(select(User).where(User.email == body.email.strip().lower()))
     if not user or not password_check(body.password, user.password_hash):
         raise HTTPException(401, detail={'code': 'INVALID_CREDENTIALS', 'message': 'Wrong email or password'})
+    # Most recently created company decides the resumed stage; a user with
+    # several companies still gets one definite place to land after login.
+    company = await db.scalar(select(Company).where(Company.owner_id == user.id)
+                              .order_by(Company.id.desc()).limit(1))
     return ok({'access_token': make_token(user.id), 'token_type': 'bearer',
-               'user': {'id': user.id, 'name': user.name, 'email': user.email}})
+               'user': {'id': user.id, 'name': user.name, 'email': user.email},
+               'company_id': company.id if company else None,
+               'current_user_status': onboarding_stage(company)})
 
 
 @router.get('/me')

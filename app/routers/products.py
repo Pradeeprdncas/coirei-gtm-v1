@@ -6,7 +6,9 @@ from app.core.db import get_db
 from app.core.security import current_user
 from app.models.entities import Company, FieldAudit, FieldClaim, PricePlan, Product, User
 from app.schemas.api import PRODUCT_EDITABLE, PRODUCT_KINDS, ProductCreate, ProductPatch, VerifyProduct, ok
-from app.services.common import field_meta_set, message, owned_company, owned_product, safe_name
+from app.services.common import (
+    company_profile_message, field_meta_set, message, owned_company, owned_product, safe_name,
+)
 
 router = APIRouter(tags=['products'])
 
@@ -319,6 +321,17 @@ async def verify_product(
         },
     )
 
+    all_products_verified = await all_verified(db, company.id)
+
+    if all_products_verified:
+        all_products = (await db.scalars(
+            select(Product).where(Product.company_id == company.id)
+        )).all()
+        await message(
+            db, company.id, "assistant", "company_profile",
+            company_profile_message(company, list(all_products)),
+        )
+
     await db.commit()
 
     return ok({
@@ -327,9 +340,7 @@ async def verify_product(
         "revision": product.revision,
         "changed": True,
         "accepted_fields": newly_accepted,
-        "all_products_verified": await all_verified(
-            db, company.id
-        ),
+        "all_products_verified": all_products_verified,
     })
 
 async def all_verified(db:AsyncSession,company_id:int)->bool:

@@ -12,7 +12,10 @@ from app.core.security import current_user
 from app.models.entities import Company, Conversation, ExtractionJob, FieldAudit, GapAnswer, GapQuestion, Message, Product, Source, User
 from app.models.intelligence import IntelligenceLink
 from app.schemas.api import ChatInput, GapAnswers, ok
-from app.services.common import domain, enough, message, onboarding_conversation, owned_company, source_from_text, field_meta_set, safe_name
+from app.services.common import (
+    domain, enough, message, missing_business_fields, onboarding_conversation, owned_company,
+    source_from_text, field_meta_set, safe_name, verification_message,
+)
 from app.services.documents import extract_document
 from app.services.intelligence.client import crawler_request
 from app.services.llm import json_completion
@@ -344,6 +347,19 @@ async def chat_message(company_id: int, body: ChatInput, db: AsyncSession = Depe
             return ok({'idempotent_replay':True,'message_id':old.id,
                        'assistant_message_id': reply.id if reply else None,
                        'reply':reply.content if reply else None})
+
+    if body.action:
+        # The "Add Business Context" choice (Upload Documents / Answer Questions):
+        # recorded in the conversation same as the existing continue_website_data
+        # action, no RAG/LLM call needed.
+        action_message = await message(db, company_id, 'user', 'action',
+                                       {'action': body.action}, body.client_message_id)
+        await db.commit()
+        next_call = ('POST /companies/{company_id}/context (with files)'
+                    if body.action == 'upload_documents'
+                    else 'POST /companies/{company_id}/gap-questions')
+        return ok({'user_message_id': action_message.id, 'action': body.action, 'next_call': next_call})
+
     question = body.message.strip()
     user_message = await message(db, company_id, 'user', 'text', {'text':question}, body.client_message_id)
     await db.commit()  # Never lose user message if provider fails
@@ -748,6 +764,8 @@ async def generate_gap(
             "field": field_key,
             "question": question_text,
             "suggestions": suggestions,
+            "status": "needs_answer",
+            "answer": None,
         })
 
     # Preserve the onboarding conversation timeline.
@@ -771,16 +789,46 @@ async def generate_gap(
     })
 
 
+async def _patch_gap_question_statuses(db: AsyncSession, company_id: int, patches: dict[int, dict]):
+    """Update the status/answer of already-posted gap_questions messages in place,
+    so the conversation shows each question's current state (needs_answer /
+    answered / skipped) instead of relying on a separate trailing message."""
+    convo = await onboarding_conversation(db, company_id)
+    rows = (await db.scalars(select(Message).where(
+        Message.conversation_id == convo.id, Message.type == 'gap_questions'
+    ))).all()
+    for row in rows:
+        questions = (row.content or {}).get('questions') or []
+        changed = False
+        new_questions = []
+        for q in questions:
+            patch = patches.get(q.get('id'))
+            if patch:
+                q = {**q, **patch}
+                changed = True
+            new_questions.append(q)
+        if changed:
+            row.content = {**row.content, 'questions': new_questions}
+
+
 @router.post('/{company_id}/gap-answers')
 async def answer_gaps(company_id:int, body:GapAnswers, db:AsyncSession=Depends(get_db),
                       user:User=Depends(current_user)):
     company=await owned_company(db,company_id,user.id)
     updates=[]
+    patches: dict[int, dict] = {}
     for answer in body.answers:
         q=await db.scalar(select(GapQuestion).where(GapQuestion.id==answer.question_id,
                                  GapQuestion.company_id==company_id).with_for_update())
         if not q or q.status != 'open':
             raise HTTPException(409,detail={'code':'INVALID_GAP_QUESTION','message':str(answer.question_id)})
+
+        if answer.skip:
+            q.status = 'skipped'
+            patches[q.id] = {'status': 'skipped', 'answer': None}
+            updates.append({'field': q.field_key, 'skipped': True})
+            continue
+
         text=answer.answer.strip()
         # If user selected suggestion, keep its cited evidence but record user confirmation.
         chosen=next((s for s in q.suggestions if s['text']==text),None)
@@ -810,14 +858,23 @@ async def answer_gaps(company_id:int, body:GapAnswers, db:AsyncSession=Depends(g
         db.add(GapAnswer(question_id=q.id,actor_id=user.id,raw_text=text,normalized_value={'value':text,
                             'source_id':chosen.get('source_id') if chosen else None}))
         q.status='answered'
+        patches[q.id] = {'status': 'answered', 'answer': text}
         updates.append({'field':q.field_key,'value':text})
     company.revision+=1
+    await _patch_gap_question_statuses(db, company_id, patches)
     products=(await db.scalars(select(Product).where(Product.company_id==company_id))).all()
     is_ready=enough(company,products)
     company.status='ready_to_verify' if is_ready else 'needs_context'
     await message(db,company_id,'user','gap_answers',{'answers':updates})
-    await message(db,company_id,'assistant','verification_ready' if is_ready else 'research_attention',
-                  {'next_action':'verify_products' if is_ready else 'add_business_context'})
+    if is_ready:
+        await message(db, company_id, 'assistant', 'verification_ready', verification_message(company, products))
+    else:
+        missing = missing_business_fields(company, products)
+        await message(db, company_id, 'assistant', 'research_attention', {
+            'next_action': 'add_business_context',
+            'missing_data': [key for key, _ in missing],
+            'missing_data_labels': [label for _, label in missing],
+        })
     await db.commit()
     return ok({'answered':len(body.answers),'next_action':'verify_products' if is_ready else 'add_business_context'})
 
@@ -827,8 +884,9 @@ async def continue_with_website(company_id:int, db:AsyncSession=Depends(get_db),
                                 user:User=Depends(current_user)):
     company=await owned_company(db,company_id,user.id)
     company.status='ready_to_verify'
+    products=(await db.scalars(select(Product).where(Product.company_id==company_id))).all()
     await message(db,company_id,'user','action',{'action':'continue_website_data'})
-    await message(db,company_id,'assistant','verification_ready',{'next_action':'verify_products'})
+    await message(db, company_id, 'assistant', 'verification_ready', verification_message(company, products))
     await db.commit()
     return ok({'company_id':company_id,'next_action':'verify_products',
                'verification_url':f'/workspace/verification?company_id={company_id}'})
