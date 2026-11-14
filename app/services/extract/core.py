@@ -280,7 +280,8 @@ async def extract_products(db: AsyncSession, company: Company, products: list[Pr
         await db.flush()
 
 
-PRICE = re.compile(r'(?P<cur>\$|USD\s*|€|£|₹)\s*(?P<n>\d+(?:[.,]\d{1,2})?)\s*'
+PRICE = re.compile(r'(?P<cur>\$|USD\s*|€|£|₹)\s*'
+                   r'(?P<n>\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*'
                    r'(?P<period>/(?:agent|seat|user|month|year|mo|yr|outcome|conversation)|per\s+(?:agent|seat|user|month|year|outcome))?', re.I)
 
 
