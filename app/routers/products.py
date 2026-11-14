@@ -9,10 +9,15 @@ from app.core.security import current_user
 from app.models.entities import Company, FieldAudit, FieldClaim, PricePlan, Product, User
 from app.schemas.api import PRODUCT_EDITABLE, PRODUCT_KINDS, ProductCreate, ProductPatch, VerifyProduct, ok
 from app.services.common import (
-    company_profile_message, field_meta_set, message, owned_company, owned_product, safe_name,
+    company_profile_message, field_meta_set, field_status, field_statuses, message, owned_company,
+    owned_product, safe_name,
 )
 
 router = APIRouter(tags=['products'])
+
+PRODUCT_STATUS_FIELDS = ('name', 'website_url', 'category', 'product_type', 'description',
+                         'key_features', 'main_use_case', 'business_model',
+                         'positioning', 'value_proposition', 'target_market', 'icp')
 
 
 def product_dict(p: Product):
@@ -62,7 +67,9 @@ async def products(company_id:int, db:AsyncSession=Depends(get_db), user:User=De
                            .order_by(Product.id))).all()
     return ok({'company_id':company_id,'company_name':company.name,'total_products':len(rows),
                'products':[dict(product_dict(p), verification={'can_verify':not blockers(p),
-                            'blocking_reasons':blockers(p)}) for p in rows]})
+                            'blocking_reasons':blockers(p)},
+                            field_status=field_statuses(p, p.field_meta, PRODUCT_STATUS_FIELDS))
+                           for p in rows]})
 
 
 @router.get('/products/{product_id}')
@@ -71,12 +78,15 @@ async def detail(product_id:int, db:AsyncSession=Depends(get_db), user:User=Depe
     plans=(await db.scalars(select(PricePlan).where(PricePlan.product_id==product.id).order_by(PricePlan.id))).all()
     claims=(await db.scalars(select(FieldClaim).where(FieldClaim.product_id==product.id)
                              .order_by(FieldClaim.id))).all()
+    status = field_statuses(product, product.field_meta, PRODUCT_STATUS_FIELDS)
+    status['pricing'] = field_status(product.field_meta, 'pricing', plans)
     return ok(dict(product_dict(product),
         pricing=[{'id':p.id,'name':p.name,'price_amount':float(p.price_amount) if p.price_amount is not None else None,
                   'currency':p.currency,'unit':p.unit,'period':p.period,'is_custom':p.is_custom,
                   'quote':p.quote,'source_id':p.source_id} for p in plans],
         evidence=[{'id':c.id,'field':c.field_key,'value':c.value,'source_id':c.source_id,
                    'quote':c.quote,'status':c.status} for c in claims],
+        field_status=status,
         verification={'can_verify':not blockers(product),'blocking_reasons':blockers(product)}))
 
 

@@ -105,6 +105,32 @@ def field_meta_set(meta: dict | None, field: str, *, status='found_on_site', rev
     return result
 
 
+def field_status(meta: dict | None, field: str, value) -> str:
+    """Human-facing verification status for one field, derived from its
+    field_meta entry: 'verified' / 'extracted' / 'needs_confirmation' /
+    'inferred' / 'not_found'. One shared mapping so the label means the same
+    thing on every endpoint that shows field-level detail (company profile,
+    product detail, product list)."""
+    empty = value in (None, '', [], {})
+    entry = (meta or {}).get(field)
+    if empty:
+        return 'not_found'
+    if not entry:
+        return 'extracted'  # a value with no tracked history (e.g. seeded) — assume found, not verified
+    if entry.get('review') == 'accepted':
+        return 'verified'
+    if entry.get('status') == 'ai_suggested':
+        return 'inferred'
+    if entry.get('status') in ('found_on_site', 'user_provided') and (entry.get('confidence') or 0) >= 70:
+        return 'extracted'
+    return 'needs_confirmation'
+
+
+def field_statuses(obj, meta: dict | None, fields: tuple[str, ...]) -> dict[str, str]:
+    """field_status() for a batch of fields read off `obj` by attribute name."""
+    return {f: field_status(meta, f, getattr(obj, f, None)) for f in fields}
+
+
 def safe_name(name: str) -> bool:
     name = (name or '').strip()
     return bool(name and not name.isdigit() and len(name) <= 255 and not re.match(r'^(faq|pricing|plans|features)$', name, re.I))

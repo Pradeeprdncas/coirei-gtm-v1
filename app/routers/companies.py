@@ -5,9 +5,15 @@ from app.core.db import get_db
 from app.core.security import current_user
 from app.models.entities import Company, FieldAudit, FieldClaim, User
 from app.schemas.api import COMPANY_EDITABLE, CompanyPatch, CreateCompany, ok
-from app.services.common import domain, field_meta_set, message, onboarding_conversation, owned_company
+from app.services.common import (
+    domain, field_meta_set, field_statuses, message, onboarding_conversation, owned_company,
+)
 
 router = APIRouter(prefix='/companies', tags=['companies'])
+
+COMPANY_STATUS_FIELDS = ('name', 'website_url', 'industry', 'size_band', 'employee_count',
+                         'headquarters', 'country', 'founded_year', 'description', 'business_model',
+                         'market_segment', 'value_proposition', 'icp', 'socials')
 
 
 def company_dict(c: Company):
@@ -56,7 +62,9 @@ async def get_profile(company_id: int, db: AsyncSession = Depends(get_db),
     company = await owned_company(db, company_id, user.id)
     claims = (await db.scalars(select(FieldClaim).where(FieldClaim.company_id == company_id,
         FieldClaim.product_id.is_(None)).order_by(FieldClaim.id))).all()
-    return ok({'company': company_dict(company), 'claims': [
+    return ok({'company': company_dict(company),
+               'field_status': field_statuses(company, company.field_meta, COMPANY_STATUS_FIELDS),
+               'claims': [
         {'id': x.id, 'field': x.field_key, 'value': x.value, 'quote': x.quote,
          'source_id': x.source_id, 'status': x.status} for x in claims]})
 
