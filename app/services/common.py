@@ -245,14 +245,21 @@ def company_profile_message(company: Company, products: list[Product]) -> dict:
 
 
 def onboarding_stage(company: Company | None) -> str:
-    """The user's current onboarding stage, for login/signup responses."""
+    """The user's current onboarding stage, for login/signup responses.
+
+    'onboarding_complete' (not just 'complete'): the ONBOARDING flow is done
+    once a product is verified, but the project as a whole isn't — competitor
+    discovery and other post-onboarding steps come after this, so the status
+    name leaves room for a later 'project_complete'-type value instead of
+    reusing a bare 'complete' that would then be ambiguous.
+    """
     if company is None:
         return 'new'
     return {
         'researching': 'researching',
         'needs_context': 'needs_context',
         'ready_to_verify': 'verification',
-        'complete': 'complete',
+        'complete': 'onboarding_complete',
     }.get(company.status, 'needs_context')
 
 

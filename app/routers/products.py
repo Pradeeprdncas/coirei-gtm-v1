@@ -1,6 +1,8 @@
+import re
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.security import current_user
@@ -78,6 +80,41 @@ async def detail(product_id:int, db:AsyncSession=Depends(get_db), user:User=Depe
         verification={'can_verify':not blockers(product),'blocking_reasons':blockers(product)}))
 
 
+def _clean_pricing(value) -> list[dict]:
+    """Validate a user-submitted pricing list (replaces every PricePlan row for
+    the product). Lenient: only `name` is required; everything else defaults
+    sensibly, so the frontend can send exactly the fields it has."""
+    if not isinstance(value, list):
+        raise HTTPException(422, detail={'code': 'INVALID_FIELD', 'message': 'pricing must be a list'})
+    cleaned = []
+    for i, item in enumerate(value):
+        if not isinstance(item, dict) or not str(item.get('name', '')).strip():
+            raise HTTPException(422, detail={'code': 'INVALID_PRICING_ITEM',
+                                             'message': f'pricing[{i}] needs a non-empty "name"'})
+        amount = item.get('price_amount')
+        if amount is not None:
+            try:
+                amount = Decimal(str(amount))
+            except (InvalidOperation, ValueError):
+                raise HTTPException(422, detail={'code': 'INVALID_PRICING_ITEM',
+                                                 'message': f'pricing[{i}].price_amount is not a number'})
+        currency = item.get('currency')
+        if currency is not None and not re.fullmatch(r'[A-Za-z]{3}', str(currency)):
+            raise HTTPException(422, detail={'code': 'INVALID_PRICING_ITEM',
+                                             'message': f'pricing[{i}].currency must be a 3-letter code'})
+        cleaned.append({
+            'name': str(item['name']).strip()[:120],
+            'kind': str(item.get('kind') or 'base')[:40],
+            'price_amount': amount,
+            'currency': str(currency).upper() if currency else None,
+            'unit': (str(item['unit'])[:50] if item.get('unit') else None),
+            'period': (str(item['period'])[:50] if item.get('period') else None),
+            'is_custom': bool(item.get('is_custom', False)),
+            'quote': item.get('quote'),
+        })
+    return cleaned
+
+
 @router.patch('/products/{product_id}')
 async def patch_product(product_id:int, body:ProductPatch, db:AsyncSession=Depends(get_db),
                         user:User=Depends(current_user)):
@@ -98,13 +135,33 @@ async def patch_product(product_id:int, body:ProductPatch, db:AsyncSession=Depen
     for field in ('business_model','icp','target_market','value_proposition'):
         if field in body.fields and not isinstance(body.fields[field],dict):
             raise HTTPException(422,detail={'code':'INVALID_FIELD','message':f'{field} must be an object'})
+    new_pricing = _clean_pricing(body.fields['pricing']) if 'pricing' in body.fields else None
+    if 'pricing' in body.accept_fields:
+        raise HTTPException(422, detail={'code': 'UNKNOWN_FIELD',
+                                         'message': 'pricing has no review state to accept; just set it in fields'})
     for field in body.accept_fields:
         value=body.fields.get(field,getattr(product,field))
         if value in (None,'',[],{}):
             raise HTTPException(409,detail={'code':'EMPTY_FIELD','message':f'{field} cannot be accepted empty'})
     meta=dict(product.field_meta or {})
     dirty=False
+    if new_pricing is not None:
+        existing_plans=(await db.scalars(select(PricePlan).where(PricePlan.product_id==product.id))).all()
+        before=[{'name':p.name,'price_amount':float(p.price_amount) if p.price_amount is not None else None,
+                 'currency':p.currency} for p in existing_plans]
+        await db.execute(delete(PricePlan).where(PricePlan.product_id==product.id))
+        for item in new_pricing:
+            db.add(PricePlan(company_id=company.id, product_id=product.id, **item))
+        product.pricing_status='published_needs_review' if new_pricing else 'not_found'
+        after=[{**item,'price_amount':float(item['price_amount']) if item['price_amount'] is not None else None}
+               for item in new_pricing]
+        db.add(FieldAudit(company_id=company.id,product_id=product.id,actor_id=user.id,
+                          field_key='pricing',before={'value':before},after={'value':after}))
+        meta=field_meta_set(meta,'pricing',status='user_provided',review='accepted',confidence=100)
+        dirty=True
     for field,value in body.fields.items():
+        if field=='pricing':
+            continue
         old=getattr(product,field)
         if old==value:
             continue

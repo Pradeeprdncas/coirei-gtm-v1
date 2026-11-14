@@ -77,7 +77,7 @@ COMPANY_EDITABLE = {'name','website_url','description','industry','size_band','h
                     'value_proposition','icp','socials'}
 PRODUCT_EDITABLE = {'name','website_url','candidate_kind','category','product_type','description',
                     'key_features','main_use_case','business_model','pricing_status','positioning',
-                    'value_proposition','target_market','icp'}
+                    'value_proposition','target_market','icp','pricing'}
 PRODUCT_KINDS = {'standalone_product','suite','module','feature','service','integration','unknown'}
 
 
