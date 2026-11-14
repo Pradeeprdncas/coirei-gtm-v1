@@ -12,6 +12,16 @@ from app.services.llm import start_llm_audit, finish_llm_audit
 
 log = logging.getLogger(__name__)
 
+_MAX_STEPS = 200
+
+
+def _add_step(job: ExtractionJob, kind: str, **data):
+    """Append a timestamped entry to the job's growing progress feed (see
+    GET /companies/{id}/status's `steps`). Capped so a very large crawl can't
+    grow this JSONB column without bound."""
+    entry = {'kind': kind, 'at': datetime.now(timezone.utc).isoformat(), **data}
+    job.steps = [*(job.steps or []), entry][-_MAX_STEPS:]
+
 
 async def process_job(company_id: int, job_id: int, urls: list[str]):
     llm_token = start_llm_audit()
@@ -20,6 +30,7 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
             j = await progress_db.get(ExtractionJob, job_id)
             if j:
                 j.current_url, j.pages_done, j.pages_total = url, done, total
+                _add_step(j, 'browsing', url=url, status=f'Opening page {done}/{total}')
                 await progress_db.commit()
     try:
         async with Session() as db:
@@ -28,6 +39,7 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
             if not job or not company:
                 return
             job.status, job.stage, company.status = 'running', 'scraping', 'researching'
+            _add_step(job, 'thinking', status='Starting company analysis')
             await db.commit()
         for url in urls[:2]:
             try:
@@ -44,11 +56,14 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
                         structured={**page.structured, 'nav':
                             [{'url': link, 'label': text} for link, text in page.links[:80]]},
                         status=page.status)
+                _add_step(job, 'browsing', url=url,
+                         status=f'Read {len(pages)} page(s)' if pages else 'No pages found')
                 await db.commit()
         async with Session() as db:
             job = await db.get(ExtractionJob, job_id)
             company = await db.get(Company, company_id)
             job.stage, job.current_url = 'indexing', None
+            _add_step(job, 'thinking', status='Saving source evidence and preparing retrieval')
             await db.commit()
             all_sources = (await db.scalars(select(Source).where(Source.company_id == company_id,
                         Source.status == 'ok').order_by(Source.id))).all()
@@ -69,6 +84,7 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
                 job.warnings = [*(job.warnings or []), {'reason': 'embedding_degraded_fts_only'}]
             await db.commit()
             job.stage = 'extracting'
+            _add_step(job, 'thinking', status='Extracting company, products, pricing and features')
             await db.commit()
             web_sources = [x for x in sources if x.kind in {'website', 'document'}]
             await extract_company_structured(db, company, web_sources)
@@ -97,6 +113,7 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
             # maybe_post_readiness_decision() in app/services/common.py.
             job.status, job.stage, job.completed_at = 'completed', 'completed', datetime.now(timezone.utc)
             job.current_url = None
+            _add_step(job, 'thinking', status='Company analysis finished')
             await db.commit()
     except Exception as exc:
         if llm_token is not None:
@@ -108,6 +125,7 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
             if job:
                 job.status, job.stage, job.error = 'failed', 'failed', str(exc)[:500]
                 job.completed_at = datetime.now(timezone.utc)
+                _add_step(job, 'failed', status=f'Research failed: {str(exc)[:200]}')
             if company:
                 company.status = 'needs_context'
                 await message(db, company_id, 'assistant', 'error', {'text': 'Research failed. Please retry or add a document.',

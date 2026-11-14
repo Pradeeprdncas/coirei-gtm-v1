@@ -212,6 +212,7 @@ class ExtractionJob(Base):
     pages_total: Mapped[int] = mapped_column(Integer, default=0)
     pages_done: Mapped[int] = mapped_column(Integer, default=0)
     warnings: Mapped[list] = mapped_column(JSONB, default=list)
+    steps: Mapped[list] = mapped_column(JSONB, default=list)
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

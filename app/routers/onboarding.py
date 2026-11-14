@@ -2,6 +2,7 @@ import hashlib
 import json
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -312,15 +313,31 @@ async def status(company_id: int, db: AsyncSession = Depends(get_db), user: User
         elif gtm_status == 'UNAVAILABLE':
             messages.append('Deep crawl status temporarily unavailable')
 
+    # A growing, chronological feed of what's happened so far, merging our own
+    # add_context pipeline's step log with the GTM crawler's page-fetch
+    # history — each poll shows the full timeline, not just the current state,
+    # so the frontend can render an always-growing list (like the old SSE feed)
+    # from a plain polling endpoint instead of needing a push/streaming one.
+    steps = list(job.steps) if job and job.steps else []
+    for page in (intelligence.get('url_report', []) if intelligence else []):
+        if page.get('fetched_at'):
+            steps.append({'kind': 'browsing', 'at': page['fetched_at'], 'url': page.get('url'),
+                          'status': 'Read page content', 'screenshot_url': page.get('screenshot_url')})
+    steps.sort(key=lambda s: s.get('at') or '')
+    if overall_status in ('success', 'failed'):
+        steps.append({'kind': overall_status, 'at': datetime.now(timezone.utc).isoformat(),
+                     'status': 'Research complete' if overall_status == 'success' else 'Research failed'})
+
     return ok({'company_id': company_id, 'company_status': company.status,
                'job_id': job.id if job else None, 'status': main_status,
                'stage': job.stage if job else 'created', 'current_url':job.current_url if job else None,
                'pages_done':job.pages_done if job else 0,'pages_total': job.pages_total if job else 0,
                'warnings': job.warnings if job else [], 'error': job.error if job else None,
-               'overall_status': overall_status, 'messages': messages,
+               'overall_status': overall_status, 'messages': messages, 'steps': steps,
                'intelligence': intelligence,
                'live_browser_url': intelligence.get('live_browser_url') if intelligence else None,
                'url_report': intelligence.get('url_report', []) if intelligence else [],
+               'poll_interval_seconds': 7,
                'next_action': 'verify_products' if company.status in {'ready_to_verify','complete'} else
                               'add_business_context' if company.status=='needs_context' else 'watch_status'})
 
