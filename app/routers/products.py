@@ -23,7 +23,8 @@ PRODUCT_STATUS_FIELDS = ('name', 'website_url', 'category', 'product_type', 'des
 def product_dict(p: Product):
     keys=('id','company_id','parent_id','name','website_url','candidate_kind','category',
           'product_type','description','key_features','main_use_case','business_model','pricing_status',
-          'positioning','value_proposition','target_market','icp','field_meta','status','revision','verified_at')
+          'positioning','value_proposition','target_market','icp','field_meta','status','revision',
+          'verified_at','updated_at')
     return {key:getattr(p,key) for key in keys}
 
 

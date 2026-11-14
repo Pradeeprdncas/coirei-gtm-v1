@@ -19,7 +19,8 @@ COMPANY_STATUS_FIELDS = ('name', 'website_url', 'industry', 'size_band', 'employ
 def company_dict(c: Company):
     return {key: getattr(c, key) for key in ('id','name','website_url','domain','industry','size_band',
             'employee_count','headquarters','country','founded_year','description','business_model',
-            'market_segment','value_proposition','icp','socials','field_meta','status','revision')}
+            'market_segment','value_proposition','icp','socials','field_meta','status','revision',
+            'created_at','updated_at')}
 
 
 @router.post('')
