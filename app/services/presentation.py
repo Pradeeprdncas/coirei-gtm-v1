@@ -201,6 +201,57 @@ def billing_period(plan) -> str:
     return ''
 
 
+AMOUNT = re.compile(r'(?P<cur>\$|USD\s*|€|£|₹)\s*'
+                    r'(?P<n>\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)')
+
+
+def _price_from_text(text: str) -> dict | None:
+    """'Starts at $185/mo' -> {'price': '$185', 'billingPeriod': '/month'}."""
+    match = AMOUNT.search(text or '')
+    if not match:
+        return None
+    symbol = {'€': 'EUR', '£': 'GBP', '₹': 'INR'}.get(match.group('cur').strip(), 'USD')
+    return {'price': money(Decimal(match.group('n').replace(',', '')), symbol, False),
+            'billingPeriod': _period_from(text), 'currency': symbol}
+
+
+def derived_plans(product, company=None) -> list[dict]:
+    """Plans rebuilt from business_model when pricing_items has no rows.
+
+    Extraction only writes a PricePlan when it finds an explicit plan/amount
+    pair on a pricing page, but the business_model JSONB often still holds the
+    tier names ('pricing_tiers', 'plan_name') and published amounts ('price',
+    'pricing_summary') the crawler read. Without this the card shows no
+    pricing at all for a product whose plans we actually know.
+
+    Marked `derived` so the UI can show them as unconfirmed rather than as
+    verified plan rows."""
+    model = product.business_model if isinstance(product.business_model, dict) else {}
+    if not model and company is not None and isinstance(company.business_model, dict):
+        model = company.business_model
+    names = _list(_pick(model, 'plan_name', 'pricing_tiers', 'plans', 'tiers'))
+    prices = _list(_pick(model, 'price', 'prices', 'published_prices', 'pricing_summary'))
+    parsed = [p for p in (_price_from_text(text) for text in prices) if p]
+    rows = []
+    # Pair a tier with its amount only when the two lists line up; otherwise
+    # guessing which price belongs to which tier would invent a fact.
+    paired = len(parsed) == len(names) and names
+    for index, name in enumerate(names):
+        amount = parsed[index] if paired else {}
+        rows.append({'id': None, 'name': name, 'price': amount.get('price', ''),
+                     'billingPeriod': amount.get('billingPeriod', ''),
+                     'features': prices[index] if paired else '',
+                     'currency': amount.get('currency', ''), 'is_custom': False,
+                     'price_amount': None, 'derived': True})
+    if not rows:
+        for index, amount in enumerate(parsed):
+            rows.append({'id': None, 'name': prices[index][:60], 'price': amount['price'],
+                         'billingPeriod': amount['billingPeriod'], 'features': prices[index],
+                         'currency': amount['currency'], 'is_custom': False,
+                         'price_amount': None, 'derived': True})
+    return rows[:8]
+
+
 def plan_view(plan) -> dict:
     return {
         'id': plan.id,
@@ -211,6 +262,7 @@ def plan_view(plan) -> dict:
         'currency': plan.currency or '',
         'is_custom': bool(plan.is_custom),
         'price_amount': float(plan.price_amount) if plan.price_amount is not None else None,
+        'derived': False,
     }
 
 
@@ -234,10 +286,16 @@ def business_model_labels(value) -> list[str]:
     return out[:6]
 
 
-def pricing_model_label(product, plans) -> str:
+def pricing_model_label(product, plans, company=None) -> str:
     # 'model'/'revenue_model' before 'payment_model': the latter often holds a
     # billing cycle ('monthly'), which is the billingCycle field, not the model.
-    picked = _pick(product.business_model, 'pricing_model', 'model', 'revenue_model', 'payment_model')
+    # 'payment_model' usually holds a billing cycle ('monthly'), which belongs
+    # in billingCycle — so the company's real model beats the product's cycle.
+    strong = ('pricing_model', 'model', 'revenue_model', 'business_model')
+    models = [product.business_model] + ([company.business_model] if company is not None else [])
+    picked = next((v for v in (_pick(m, *strong) for m in models) if v), None)
+    if not picked:
+        picked = next((v for v in (_pick(m, 'payment_model') for m in models) if v), None)
     if picked:
         return _text(picked)
     if any(p.is_custom for p in plans) and len(plans) == 1:
@@ -254,23 +312,53 @@ def billing_cycle_label(plans) -> str:
     return ' & '.join(sorted(c.capitalize() for c in cycles))
 
 
-def product_tags(product, plans) -> list[str]:
-    """The grid card's pill badges, from real classification data only."""
+MAX_TAG = 28
+
+
+def _tag_text(value: str) -> str:
+    """Trim a phrase down to something that fits a pill badge.
+
+    Extracted values are written as prose ("Regulated sectors (healthcare,
+    finance, legal, etc.)"), which overflows a badge; the leading clause is
+    the part that identifies it."""
+    text = re.sub(r'\s+', ' ', (value or '').strip(' .,;'))
+    text = re.sub(r'\s*\(.*?\)', '', text).strip()          # drop parentheticals
+    head = re.split(r'\s+(?:and|or)\s+|[,;/]| - ', text)[0].strip()
+    if 2 <= len(head) <= MAX_TAG:
+        return head
+    return text[:MAX_TAG].rstrip(' ,;-') if text else ''
+
+
+def product_tags(product, plans, company=None) -> list[str]:
+    """The grid card's pill badges, from real classification data only.
+
+    Ordered most- to least-specific, and deliberately wide: for many products
+    category/product_type are empty while the classification actually lives in
+    target_market, icp or business_model, which left the card with no badges
+    at all."""
+    sources = [
+        product.category, product.product_type,
+        _pick(product.target_market, 'industries', 'target_industries', 'industry', 'verticals'),
+        _pick(product.icp, 'industry', 'industry_focus', 'industries'),
+        _pick(product.target_market, 'segment', 'target_segments', 'use_cases'),
+        _pick(product.business_model, 'model', 'customer_type', 'revenue_model', 'sales_motion'),
+    ]
+    if company is not None:
+        sources.append(company.industry)
+        sources.append(_pick(company.business_model, 'model', 'customer_type', 'revenue_model'))
     tags = []
-    for value in (product.category, product.product_type):
+    for value in sources:
         tags.extend(_list(value))
-    tags.extend(_list(_pick(product.target_market, 'industries', 'target_industries', 'industry'))[:2])
-    tags.extend(_list(_pick(product.icp, 'industry', 'industry_focus'))[:1])
-    # Plan names (Free/Pro/Scale/Enterprise) describe packaging, not the
-    # product — only the model itself is a useful badge.
-    tags.extend(_list(_pick(product.business_model, 'model', 'customer_type', 'revenue_model'))[:1])
     seen, out = set(), []
-    for tag in tags:
+    for raw in tags:
+        tag = _tag_text(raw)
         key = tag.lower()
-        if key not in seen and 2 <= len(tag) <= 40:
+        if tag and key not in seen:
             seen.add(key)
             out.append(tag)
-    return out[:3]
+        if len(out) == 3:
+            break
+    return out
 
 
 def field_meta_view(meta: dict | None, source_urls: dict[int, str]) -> dict:
@@ -363,21 +451,43 @@ def positioning_view(product, meta) -> dict:
     return {**_section(product, meta, 'positioning'), 'statement': _text(product.positioning)}
 
 
-def pricing_view(product, meta, plans) -> dict:
+def pricing_view(product, meta, plans, company=None) -> dict:
+    rows = [plan_view(p) for p in plans]
+    derived = not rows
+    if derived:
+        rows = derived_plans(product, company)
+    status = field_status(meta, 'pricing', plans)
+    if derived and rows:
+        # Rebuilt from business_model rather than read off a pricing page, so
+        # it needs confirming even though we do have the plan names.
+        status = 'needs_confirmation'
     return {
-        'status': field_status(meta, 'pricing', plans),
+        'status': status,
         'confidence': (_confidence(meta, 'pricing') or _confidence(meta, 'pricing_status')
-                       or STATUS_CONFIDENCE.get(field_status(meta, 'pricing', plans), 0)),
-        'pricingModel': pricing_model_label(product, plans),
-        'billingCycle': billing_cycle_label(plans),
-        'currency': next((p.currency for p in plans if p.currency), 'USD'),
-        'plans': [plan_view(p) for p in plans],
+                       or STATUS_CONFIDENCE.get(status, 0)),
+        'pricingModel': pricing_model_label(product, plans, company),
+        'billingCycle': (billing_cycle_label(plans) if plans
+                         else ' & '.join(sorted({r['billingPeriod'].lstrip('/').capitalize()
+                                                 for r in rows if r['billingPeriod']}))
+                         or ('Needs confirmation' if rows else '')),
+        'currency': next((p.currency for p in plans if p.currency),
+                         next((r['currency'] for r in rows if r.get('currency')), 'USD')),
+        'plans': rows,
+        'derived': derived and bool(rows),
     }
 
 
 def product_card(product, company, plans) -> dict:
     """The product grid card."""
     first = next((p for p in plans if not p.is_custom), None) or (plans[0] if plans else None)
+    if first is not None:
+        price, period = money(first.price_amount, first.currency, first.is_custom), billing_period(first)
+    else:
+        # No pricing_items rows: fall back to what business_model recorded,
+        # rather than showing a product with no price at all.
+        priced = next((r for r in derived_plans(product, company) if r['price']), None)
+        price = priced['price'] if priced else ''
+        period = priced['billingPeriod'] if priced else ''
     return {
         'id': product.id,
         'name': product.name or '',
@@ -385,10 +495,10 @@ def product_card(product, company, plans) -> dict:
         'domain': (company.domain if company else '') or '',
         'status': review_status(product),
         'description': product.description or '',
-        'tags': product_tags(product, plans),
-        'price': money(first.price_amount, first.currency, first.is_custom) if first else '',
-        'billingPeriod': billing_period(first) if first else '',
-        'model': pricing_model_label(product, plans),
+        'tags': product_tags(product, plans, company),
+        'price': price,
+        'billingPeriod': period,
+        'model': pricing_model_label(product, plans, company),
     }
 
 
@@ -415,7 +525,7 @@ def product_view(product, company, plans, meta_view: dict) -> dict:
         'icp_raw': product.icp or {},
         'positioning': positioning_view(product, meta),
         'positioning_raw': product.positioning or '',
-        'pricing': pricing_view(product, meta, plans),
+        'pricing': pricing_view(product, meta, plans, company),
         'field_meta': meta_view,
         'field_meta_raw': meta or {},
     }

@@ -101,3 +101,43 @@ def test_tags_prefer_classification_over_plan_names():
     tags = pres.product_tags(p, [])
     assert 'Free' not in tags and 'Pro' not in tags
     assert tags[:2] == ['Healthcare', 'Fintech']
+
+
+def test_pricing_falls_back_to_business_model_tiers_when_no_plan_rows():
+    # The real failing case: pricing_items empty, but business_model knows the tiers.
+    p = product(business_model={'payment_model': 'monthly',
+                                'pricing_tiers': ['Free', 'Pro', 'Enterprise']})
+    view = pres.pricing_view(p, {}, [])
+    assert [r['name'] for r in view['plans']] == ['Free', 'Pro', 'Enterprise']
+    assert view['derived'] is True
+    # Rebuilt, not read off a pricing page, so it must still be confirmed.
+    assert view['status'] == 'needs_confirmation'
+
+
+def test_pricing_pairs_tier_names_with_published_amounts():
+    p = product(business_model={'plan_name': ['Launch', 'Growth'],
+                                'price': ['Starts at $185/mo', 'starting at $495/mo']})
+    plans = pres.pricing_view(p, {}, [])['plans']
+    assert [(r['name'], r['price'], r['billingPeriod']) for r in plans] == [
+        ('Launch', '$185', '/month'), ('Growth', '$495', '/month')]
+
+
+def test_mismatched_tier_and_price_counts_are_not_paired():
+    # Guessing which price belongs to which tier would invent a fact.
+    p = product(business_model={'pricing_tiers': ['A', 'B', 'C'], 'price': ['$10/mo']})
+    assert [r['price'] for r in pres.pricing_view(p, {}, [])['plans']] == ['', '', '']
+
+
+def test_company_model_beats_a_product_billing_cycle():
+    p = product(business_model={'payment_model': 'monthly'})
+    c = SimpleNamespace(business_model={'model': 'SaaS Subscription'}, domain='x.io', industry=None)
+    assert pres.pricing_model_label(p, [], c) == 'SaaS Subscription'
+
+
+def test_tags_fall_back_past_empty_category_and_trim_prose():
+    # category/product_type null and target_market has use_cases, not industries.
+    p = product(category=None, product_type=None,
+                icp={'industry': 'Regulated sectors (healthcare, finance, legal, etc.)'},
+                target_market={'use_cases': ['customer support', 'sales outreach']})
+    tags = pres.product_tags(p, [])
+    assert tags == ['Regulated sectors', 'customer support', 'sales outreach']
