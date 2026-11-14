@@ -5,8 +5,12 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.entities import Company, Conversation, Message, Product, Source, FieldClaim
+from app.models.entities import Company, Conversation, ExtractionJob, Message, Product, Source, FieldClaim
+from app.models.intelligence import IntelligenceLink
 from app.core.config import settings
+from app.services.intelligence.client import crawler_request
+
+_RUNNING_GTM_STATES = {'CREATED', 'QUEUED', 'RUNNING', 'FINALIZING', 'PAUSED'}
 
 
 def sha(text: str) -> str:
@@ -110,6 +114,34 @@ def enough(company: Company, products: list[Product]) -> bool:
                                      for p in products if p.candidate_kind in {'standalone_product','suite'}))
 
 
+def extraction_gaps(company: Company, products: list[Product]) -> list[str]:
+    """Real, snake_case reasons enough() is False — what research_attention should
+    list in missing_data. Distinct from missing_business_fields(): this reflects
+    raw extraction completeness (does any product have a description and key
+    features yet), not the later business-profile verification checklist."""
+    gaps: list[str] = []
+    classified = [p for p in products if p.candidate_kind in ('standalone_product', 'suite')]
+    if not classified:
+        gaps.append('product_classification')
+    else:
+        complete = any(safe_name(p.name) and p.description and p.key_features for p in classified)
+        if not complete:
+            for p in classified[:5]:
+                if not safe_name(p.name):
+                    gaps.append('product_name')
+                if not p.description:
+                    gaps.append('product_description')
+                if not p.key_features:
+                    gaps.append('product_key_features')
+    if not company.business_model:
+        gaps.append('business_model')
+    if not company.value_proposition:
+        gaps.append('value_proposition')
+    if not company.icp:
+        gaps.append('icp')
+    return list(dict.fromkeys(gaps))[:6]
+
+
 # (key, human label) for each business-profile dimension that still needs real
 # data before verification is meaningful. Single source of truth for both the
 # machine-readable `missing_data` keys and their display labels.
@@ -176,3 +208,65 @@ def onboarding_stage(company: Company | None) -> str:
         'ready_to_verify': 'verification',
         'complete': 'complete',
     }.get(company.status, 'needs_context')
+
+
+async def maybe_post_readiness_decision(db: AsyncSession, company_id: int) -> dict | None:
+    """Post the research_attention / verification_ready decision once the
+    add_context pipeline AND (if one was started) the intelligence deep-crawl
+    have both reached a terminal state — never while either is still running,
+    and never more than once per research round. Called from GET .../status on
+    every poll (there is no push from either background job), so it is the
+    single place this decision actually gets made and posted; pipeline.py only
+    updates company.status, it never posts this message itself.
+
+    Returns the posted content, or None if nothing was due (still running, or
+    already decided this round).
+    """
+    job = await db.scalar(select(ExtractionJob).where(ExtractionJob.company_id == company_id)
+                          .order_by(ExtractionJob.id.desc()).limit(1))
+    if not job or job.status != 'completed':
+        return None
+
+    link = await db.get(IntelligenceLink, company_id)
+    if link is not None:
+        try:
+            crawl = await crawler_request('GET', f'/v1/crawls/{link.crawler_job_id}')
+        except HTTPException:
+            return None  # crawler unreachable: wait rather than deciding on stale info
+        if crawl.get('status') in _RUNNING_GTM_STATES:
+            return None
+
+    conversation = await onboarding_conversation(db, company_id)
+    recent = (await db.scalars(select(Message).where(Message.conversation_id == conversation.id)
+                               .order_by(Message.id.desc()).limit(15))).all()
+    for m in recent:
+        if m.type in ('research_attention', 'verification_ready'):
+            return None  # already decided this round
+        if m.type == 'research_started':
+            break
+
+    company = await db.get(Company, company_id)
+    products = (await db.scalars(select(Product).where(Product.company_id == company_id))).all()
+    llm_issue = any(isinstance(w, dict) and w.get('reason') == 'llm_unavailable' for w in (job.warnings or []))
+    ready_for_review = enough(company, products) and not llm_issue
+    company.status = 'ready_to_verify' if ready_for_review else 'needs_context'
+
+    if ready_for_review:
+        content = verification_message(company, products)
+        content['job_id'] = job.id
+        content['product_count'] = len(products)
+        await message(db, company_id, 'assistant', 'verification_ready', content)
+    else:
+        content = {
+            'title': 'Coirei AI needs a little more context',
+            'job_id': job.id,
+            'actions': ['add_business_context', 'answer_questions', 'continue_website_data'],
+            'description': 'Add documents, answer gap questions, or continue with website data.',
+            'next_action': 'needs_context',
+            'product_count': len(products),
+            'missing_data': extraction_gaps(company, products),
+        }
+        await message(db, company_id, 'assistant', 'research_attention', content)
+
+    await db.commit()
+    return content

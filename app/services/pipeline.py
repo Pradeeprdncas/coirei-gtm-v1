@@ -4,9 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from app.core.db import Session
 from app.models.entities import Company, ExtractionJob, Product, Source
-from app.services.common import (
-    domain, enough, message, missing_business_fields, source_from_text, verification_message,
-)
+from app.services.common import domain, message, source_from_text
 from app.services.scrape.core import crawl
 from app.services.rag.core import index_source
 from app.services.extract.core import catalog, derive_company, extract_products, extract_pricing, extract_company_structured
@@ -91,36 +89,14 @@ async def process_job(company_id: int, job_id: int, urls: list[str]):
                     'detail': llm_issues[0][:220],
                     'note': 'Scraping succeeded, but AI extraction was degraded. Check GET /health/llm and Ollama configuration.'
                 }]
-            is_ready = enough(company, products)
-            ready_for_review = is_ready and not llm_issues
-            company.status = 'ready_to_verify' if ready_for_review else 'needs_context'
+            # Deliberately does NOT decide ready_to_verify/needs_context or post the
+            # research_attention/verification_ready message here: that decision
+            # waits for the intelligence deep-crawl too (if one was started for
+            # this company), which this in-process job has no way to know is done.
+            # GET .../status makes that call on every poll — see
+            # maybe_post_readiness_decision() in app/services/common.py.
             job.status, job.stage, job.completed_at = 'completed', 'completed', datetime.now(timezone.utc)
             job.current_url = None
-            missing = missing_business_fields(company, products)
-            if ready_for_review:
-                content = verification_message(company, products)
-                content['job_id'] = job_id
-                content['product_count'] = len(products)
-            else:
-                content = {
-                    'title': 'Coirei AI needs a little more context',
-                    'job_id': job_id,
-                    'actions': ['add_business_context', 'answer_questions', 'continue_website_data'],
-                    'description': 'Add documents, answer gap questions, or continue with website data.',
-                    'next_action': 'needs_context',
-                    'product_count': len(products),
-                    'missing_data': [key for key, _ in missing],
-                    'missing_data_labels': [label for _, label in missing],
-                    'missing_information': [label for _, label in missing] or
-                        ['AI extraction confirmation or missing product details'],
-                    'suggested_documents': ['Business plan', 'Pricing / business model',
-                                            'Customer research', 'Sales deck'],
-                    'what_i_already_know': [k for k, v in [('Company name', company.name),
-                        ('Business model', company.business_model), ('Target market', company.market_segment),
-                        ('Products', products)] if v],
-                }
-            await message(db, company_id, 'assistant',
-                         'verification_ready' if ready_for_review else 'research_attention', content)
             await db.commit()
     except Exception as exc:
         if llm_token is not None:

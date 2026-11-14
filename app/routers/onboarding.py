@@ -13,8 +13,9 @@ from app.models.entities import Company, Conversation, ExtractionJob, FieldAudit
 from app.models.intelligence import IntelligenceLink
 from app.schemas.api import ChatInput, GapAnswers, ok
 from app.services.common import (
-    domain, enough, message, missing_business_fields, onboarding_conversation, owned_company,
-    source_from_text, field_meta_set, safe_name, verification_message,
+    domain, enough, extraction_gaps, maybe_post_readiness_decision, message, missing_business_fields,
+    onboarding_conversation, owned_company, source_from_text, field_meta_set, safe_name,
+    verification_message,
 )
 from app.services.documents import extract_document
 from app.services.intelligence.client import crawler_request
@@ -269,6 +270,13 @@ def _merge_status(main_status: str, gtm_status: str | None) -> str:
 @router.get('/{company_id}/status')
 async def status(company_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(current_user)):
     company = await owned_company(db, company_id, user.id)
+
+    # The only place research_attention / verification_ready actually gets
+    # decided and posted — see maybe_post_readiness_decision()'s docstring for
+    # why it can't happen inside the add_context job itself.
+    await maybe_post_readiness_decision(db, company_id)
+    await db.refresh(company)
+
     job = await db.scalar(select(ExtractionJob).where(ExtractionJob.company_id == company_id)
                           .order_by(ExtractionJob.id.desc()).limit(1))
     intelligence = await _intelligence_snapshot(company_id, db)
@@ -869,11 +877,9 @@ async def answer_gaps(company_id:int, body:GapAnswers, db:AsyncSession=Depends(g
     if is_ready:
         await message(db, company_id, 'assistant', 'verification_ready', verification_message(company, products))
     else:
-        missing = missing_business_fields(company, products)
         await message(db, company_id, 'assistant', 'research_attention', {
             'next_action': 'add_business_context',
-            'missing_data': [key for key, _ in missing],
-            'missing_data_labels': [label for _, label in missing],
+            'missing_data': extraction_gaps(company, products),
         })
     await db.commit()
     return ok({'answered':len(body.answers),'next_action':'verify_products' if is_ready else 'add_business_context'})
