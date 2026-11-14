@@ -15,10 +15,12 @@ from app.schemas.api import ChatInput, GapAnswers, ok
 from app.services.common import (
     already_known_summary, domain, enough, extraction_gaps, maybe_post_readiness_decision, message,
     missing_business_fields, onboarding_conversation, owned_company, source_from_text, field_meta_set,
-    safe_name, verification_message,
+    safe_name, verification_message, _summarize_field,
 )
 from app.services.documents import extract_document
 from app.services.intelligence.client import crawler_request
+from app.services.intelligence.mapping import company_candidates, product_candidates
+from app.services.intelligence.sync import _normalize_product_name, load_business_profile
 from app.services.llm import json_completion
 from app.services.pipeline import process_job
 from app.services.rag.core import retrieve
@@ -522,73 +524,72 @@ async def _gap_passages(
     return passages
 
 
-# Our field_key kind -> the GTM crawler's gap-question field key. Both sides
-# use the same Business Intelligence Profile vocabulary for these (see
-# app/services/intelligence/mapping.py), so no translation is needed beyond
-# the "company."/"gap:" prefixing each side uses.
-_GTM_GAP_FIELD = {"business_model": "business_model", "icp": "icp"}
-
-
 async def _gtm_suggestion(
     db: AsyncSession,
-    company_id: int,
+    company: Company,
     field_key: str,
+    product: Product | None = None,
 ) -> dict | None:
-    """The GTM crawler's own suggested value for this field, if a deep-crawl job
-    was linked for this company and it has a graded answer. Its questions are
-    assessed against evidence confidence thresholds (fa-v2), so this is
+    """The GTM crawler's own best-guess value for this field, pulled from its
+    full Business Intelligence Profile report (not the narrower /questions
+    endpoint — that one's "gap:" ids are for surfacing conflicts/uncertainties
+    the crawler wants a human to resolve, and mostly don't correspond 1:1 to
+    our own field keys, which is why suggestions were coming back empty for
+    almost every gap question). Its candidates are evidence-graded, so this is
     typically better-grounded than our own lighter scrape. Never raises: a
-    crawler hiccup just means no extra suggestion, not a failed gap-questions call."""
+    crawler hiccup or no-data-yet just means no extra suggestion, not a
+    failed gap-questions call."""
     kind = field_key.rsplit(".", 1)[-1]
 
-    if field_key == "company.products":
-        gtm_id = "catalogue"
-    elif kind in _GTM_GAP_FIELD:
-        gtm_id = f"gap:{_GTM_GAP_FIELD[kind]}"
-    else:
-        return None
-
-    link = await db.get(IntelligenceLink, company_id)
-
-    if link is None:
-        return None
-
     try:
-        data = await crawler_request(
-            "GET", f"/v1/companies/{link.crawler_company_id}/questions"
-        )
+        _, report = await load_business_profile(db, company)
     except HTTPException:
         return None
 
-    question = next(
-        (q for q in data.get("questions", []) if q.get("id") == gtm_id), None
-    )
+    if field_key == "company.products":
+        names = list(dict.fromkeys(
+            item["name"] for item in product_candidates(report, include_inferred=True)
+            if item.get("name")
+        ))
+        if not names:
+            return None
+        return {
+            "text": ", ".join(names)[:300], "quote": None, "source_id": None,
+            "source_url": None, "source": "gtm_crawler", "verified_by": "gtm_crawler",
+        }
 
-    if not question:
-        return None
+    if kind in ("business_model", "icp"):
+        candidate = company_candidates(report, include_inferred=True).get(kind)
+        if not candidate or not candidate.value:
+            return None
+        text = _summarize_field(candidate.value)
+        if not text:
+            return None
+        return {
+            "text": text[:300], "quote": candidate.quote, "source_id": None,
+            "source_url": candidate.source_urls[0] if candidate.source_urls else None,
+            "source": "gtm_crawler", "verified_by": "gtm_crawler",
+        }
 
-    suggested = question.get("suggested")
+    if kind in ("description", "key_features", "main_use_case") and product is not None:
+        target = _normalize_product_name(product.name)
+        match = next(
+            (item for item in product_candidates(report, include_inferred=True)
+             if item.get("name") and (item["name"].casefold() == product.name.casefold()
+                                       or _normalize_product_name(item["name"]) == target)),
+            None,
+        )
+        if not match or match.get(kind) in (None, "", [], {}):
+            return None
+        text = _summarize_field(match[kind])
+        if not text:
+            return None
+        return {
+            "text": text[:300], "quote": None, "source_id": None, "source_url": None,
+            "source": "gtm_crawler", "verified_by": "gtm_crawler",
+        }
 
-    if isinstance(suggested, list):
-        text = ", ".join(str(v) for v in suggested if v)
-    elif isinstance(suggested, str):
-        text = suggested
-    else:
-        text = ""
-
-    text = text.strip()
-
-    if not text:
-        return None
-
-    return {
-        "text": text[:300],
-        "quote": None,
-        "source_id": None,
-        "source_url": None,
-        "source": "gtm_crawler",
-        "verified_by": "gtm_crawler",
-    }
+    return None
 
 
 @router.post("/{company_id}/gap-questions")
@@ -742,7 +743,7 @@ async def generate_gap(
             ai,
         )
 
-        gtm_suggestion = await _gtm_suggestion(db, company_id, field_key)
+        gtm_suggestion = await _gtm_suggestion(db, company, field_key, product)
         if gtm_suggestion:
             key = normalize_text(gtm_suggestion["text"]).lower()
             suggestions = [gtm_suggestion] + [
