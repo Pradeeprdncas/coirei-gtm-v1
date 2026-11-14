@@ -418,7 +418,7 @@ async def complete(
     if company.status == "complete":
         return ok({
             "company_id": company_id,
-            "status": "complete",
+            "status": "onboarding_complete",
             "changed": False
         })
 
@@ -466,7 +466,7 @@ async def complete(
 
     return ok({
         "company_id": company_id,
-        "status": "complete",
+        "status": "onboarding_complete",
         "verified_product_id": verified_product_id,
         "next_action": "create_projects",
         "conversation_url": (
