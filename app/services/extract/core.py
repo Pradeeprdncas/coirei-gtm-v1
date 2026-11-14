@@ -344,6 +344,61 @@ async def extract_pricing(db: AsyncSession, company: Company, products: list[Pro
                                            status='found_on_site',review='pending')
 
 
+NARRATIVE_FIELDS = ('value_proposition', 'icp', 'target_market', 'business_model')
+
+
+async def backfill_product_narrative_fields(db: AsyncSession, company: Company, products: list[Product]):
+    """Once both the add_context pipeline and the intelligence crawl (if one
+    was started) have finished, fill a product's still-empty narrative
+    fields (value_proposition/icp/target_market/business_model) by
+    synthesizing from everything already extracted — company-level
+    equivalents plus the product's own description/features/use case. Never
+    invents a fact: a field with nothing relevant in the context comes back
+    null and stays empty, going to gap/business questions instead. Results
+    are ai_suggested + pending review, same as the existing business_model
+    fallback above — never silently treated as verified. Deliberately never
+    touches pricing, geography, or any other numeric/factual field; those
+    can't be synthesized and must come from the user."""
+    for product in products:
+        if product.candidate_kind not in CATALOG_KINDS:
+            continue
+        meta = dict(product.field_meta or {})
+        missing = [f for f in NARRATIVE_FIELDS
+                  if not getattr(product, f) and meta.get(f, {}).get('review') != 'accepted']
+        if not missing:
+            continue
+        context = {
+            'product_name': product.name, 'product_description': product.description,
+            'product_key_features': product.key_features, 'product_main_use_case': product.main_use_case,
+            'company_name': company.name, 'company_business_model': company.business_model,
+            'company_value_proposition': company.value_proposition, 'company_icp': company.icp,
+            'company_market_segment': company.market_segment,
+        }
+        if not any(v not in (None, '', [], {}) for v in context.values()):
+            continue  # nothing to synthesize from yet
+        raw = await json_completion(
+            'You write go-to-market narrative fields for ONE product, using ONLY the '
+            'company/product context given — never invent a fact, a number, a price, or '
+            'a location that is not already present in the context. If the context has '
+            'nothing relevant for a field, return null for it. JSON only.',
+            f'Context:\n{json.dumps(context, default=str)[:4000]}\n'
+            f'Missing fields to fill: {missing}\n'
+            'Return {"value_proposition": {...}|null, "icp": {...}|null, '
+            '"target_market": {...}|null, "business_model": {...}|null}')
+        changed = False
+        for field in missing:
+            value = raw.get(field) if isinstance(raw, dict) else None
+            if not isinstance(value, dict) or not value:
+                continue
+            setattr(product, field, value)
+            meta = field_meta_set(meta, field, status='ai_suggested', review='pending', confidence=50)
+            await add_claim(db, company.id, product.id, field, value, None, None, status='ai_suggested')
+            changed = True
+        if changed:
+            product.field_meta = meta
+            await db.flush()
+
+
 async def derive_company(db: AsyncSession, company: Company, sources: list[Source]):
     if not sources:
         return

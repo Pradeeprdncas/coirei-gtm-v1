@@ -300,6 +300,12 @@ async def maybe_post_readiness_decision(db: AsyncSession, company_id: int) -> di
 
     company = await db.get(Company, company_id)
     products = (await db.scalars(select(Product).where(Product.company_id == company_id))).all()
+
+    # Local import: extract.core imports from this module, so this stays a
+    # call-time import to avoid a circular import at module load.
+    from app.services.extract.core import backfill_product_narrative_fields
+    await backfill_product_narrative_fields(db, company, products)
+
     llm_issue = any(isinstance(w, dict) and w.get('reason') == 'llm_unavailable' for w in (job.warnings or []))
     ready_for_review = enough(company, products) and not llm_issue
     company.status = 'ready_to_verify' if ready_for_review else 'needs_context'
